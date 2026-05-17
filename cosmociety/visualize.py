@@ -31,9 +31,12 @@ def plot_transport_diagnostics(
     T = result["temperature"]
     kappa = result["kappa"]
     diffusivity = result["diffusivity"]
+    radiative_diffusivity = result["radiative_diffusivity"]
+    convective_diffusivity = result["convective_diffusivity"]
     flux = result["flux"]
     luminosity = result["luminosity"]
     gradient = result["temperature_gradient"]
+    threshold = result["convective_gradient_threshold"]
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharex="col")
 
@@ -42,16 +45,19 @@ def plot_transport_diagnostics(
     axes[0, 0].set_title("Temperature")
 
     axes[0, 1].plot(r, kappa, label="kappa")
-    axes[0, 1].plot(r, diffusivity, label="D")
+    axes[0, 1].plot(r, radiative_diffusivity, label="D_rad")
+    axes[0, 1].plot(r, convective_diffusivity, label="D_conv")
+    axes[0, 1].plot(r, diffusivity, label="D_total")
     axes[0, 1].set_yscale("log")
     axes[0, 1].set_ylabel("log scale")
-    axes[0, 1].set_title("Opacity and diffusivity")
+    axes[0, 1].set_title("Opacity and transport")
     axes[0, 1].legend()
 
     axes[1, 0].plot(r_interface, gradient)
+    axes[1, 0].axhline(-threshold, color="black", linestyle="--", linewidth=1)
     axes[1, 0].set_xlabel("Normalized radius r/R")
     axes[1, 0].set_ylabel("dT/dr")
-    axes[1, 0].set_title("Temperature gradient")
+    axes[1, 0].set_title("Temperature gradient and instability threshold")
 
     axes[1, 1].plot(r_interface, flux, label="flux")
     axes[1, 1].plot(r_interface, luminosity, label="r^2 flux")

@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.patches import Patch
 
 
 def animate_relaxation(
@@ -15,6 +16,9 @@ def animate_relaxation(
     r = result["r"]
     history = result["history"]
     source = result["source"]
+    threshold = result.get("convective_gradient_threshold")
+    show_convection = bool(result.get("enable_convection", False)) and threshold is not None
+    dr = r[1] - r[0]
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
@@ -29,6 +33,8 @@ def animate_relaxation(
     ax.set_title("Radiative Relaxation Toward Equilibrium")
 
     ax.grid(True, alpha=0.3)
+
+    convective_spans = []
 
     # Static source profile (scaled for visibility)
     source_scaled = source / source.max() * ymax * 0.3
@@ -46,7 +52,21 @@ def animate_relaxation(
         va="top",
     )
 
-    ax.legend()
+    legend_handles, legend_labels = ax.get_legend_handles_labels()
+    if show_convection:
+        legend_handles.append(
+            Patch(
+                facecolor=(1.0, 0.55, 0.12, 0.22),
+                edgecolor="none",
+                label="Convective region",
+            )
+        )
+    ax.legend(legend_handles, legend_labels + (["Convective region"] if show_convection else []))
+
+    def active_regions(active):
+        starts = np.flatnonzero(active & ~np.r_[False, active[:-1]])
+        ends = np.flatnonzero(active & ~np.r_[active[1:], False])
+        return zip(starts, ends)
 
     def init():
         line.set_data([], [])
@@ -54,13 +74,38 @@ def animate_relaxation(
         return line, text
 
     def update(frame):
+        nonlocal convective_spans
         T = history[frame]
 
         line.set_data(r, T)
 
-        text.set_text(f"Frame: {frame}/{len(history)-1}")
+        for span in convective_spans:
+            span.remove()
+        convective_spans = []
 
-        return line, text
+        if show_convection:
+            active = (-np.diff(T) / dr) > threshold
+            for start, end in active_regions(active):
+                convective_spans.append(
+                    ax.axvspan(
+                        r[start],
+                        r[end + 1],
+                        color="darkorange",
+                        alpha=0.28,
+                        linewidth=0,
+                        zorder=1,
+                    )
+                )
+
+            active_fraction = active.mean()
+            text.set_text(
+                f"Frame: {frame}/{len(history)-1}\n"
+                f"Convective fraction: {active_fraction:.2%}"
+            )
+        else:
+            text.set_text(f"Frame: {frame}/{len(history)-1}")
+
+        return line, text, *convective_spans
 
     anim = FuncAnimation(
         fig,
@@ -68,7 +113,7 @@ def animate_relaxation(
         init_func=init,
         frames=len(history),
         interval=1000 / fps,
-        blit=True,
+        blit=False,
     )
 
     anim.save(save_path, writer=PillowWriter(fps=fps))

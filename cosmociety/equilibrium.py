@@ -5,6 +5,33 @@ from .profiles import core_source, initial_temperature
 from .transport import diffusion_step, interface_flux
 
 
+def convective_diffusivity_from_gradient(
+    temperature: np.ndarray,
+    dr: float,
+    threshold: float,
+    strength: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Return a toy convective diffusivity triggered by steep temperature gradients.
+
+    Convection appears where the outward temperature drop is steeper than
+    threshold. The returned cell-centered diffusivity can be added to the
+    radiative diffusivity.
+    """
+    outward_drop = -np.diff(temperature) / dr
+    excess = np.maximum(outward_drop - threshold, 0.0)
+    interface_diffusivity = strength * excess / threshold
+
+    cell_diffusivity = np.zeros_like(temperature)
+    cell_diffusivity[0] = interface_diffusivity[0]
+    cell_diffusivity[-1] = interface_diffusivity[-1]
+    cell_diffusivity[1:-1] = 0.5 * (
+        interface_diffusivity[:-1] + interface_diffusivity[1:]
+    )
+
+    return cell_diffusivity, excess
+
+
 def relax_to_equilibrium(
     n: int = 200,
     dt: float = 1e-5,
@@ -17,6 +44,9 @@ def relax_to_equilibrium(
     stability_safety: float = 0.2,
     opacity_power: float = 3.0,
     geometry: str = "spherical",
+    enable_convection: bool = True,
+    convective_gradient_threshold: float = 2.0,
+    convective_strength: float = 0.05,
 ) -> dict:
     """
     Relax the toy stellar temperature profile toward equilibrium.
@@ -37,8 +67,18 @@ def relax_to_equilibrium(
     for step in range(max_steps):
         old_T = T.copy()
         kappa = T ** (-opacity_power)
-        diffusivity_profile = diffusivity / kappa
-        max_diffusivity = float(np.max(diffusivity_profile))
+        radiative_diffusivity = diffusivity / kappa
+        convective_diffusivity = np.zeros_like(T)
+        if enable_convection:
+            convective_diffusivity, _ = convective_diffusivity_from_gradient(
+                temperature=T,
+                dr=dr,
+                threshold=convective_gradient_threshold,
+                strength=convective_strength,
+            )
+
+        total_diffusivity = radiative_diffusivity + convective_diffusivity
+        max_diffusivity = float(np.max(total_diffusivity))
         stable_dt = stability_safety * dr**2 / max_diffusivity
         step_dt = min(dt, stable_dt)
 
@@ -46,7 +86,7 @@ def relax_to_equilibrium(
             temperature=T,
             source=source,
             dt=step_dt,
-            diffusivity=diffusivity_profile,
+            diffusivity=total_diffusivity,
             space_temperature=space_temperature,
             surface_cooling=surface_cooling,
             dr=dr,
@@ -73,8 +113,18 @@ def relax_to_equilibrium(
             break
 
     kappa = T ** (-opacity_power)
-    diffusivity_profile = diffusivity * T ** opacity_power
-    flux = interface_flux(T, diffusivity_profile, dr)
+    radiative_diffusivity = diffusivity * T ** opacity_power
+    convective_diffusivity = np.zeros_like(T)
+    convective_excess = np.zeros(len(T) - 1)
+    if enable_convection:
+        convective_diffusivity, convective_excess = convective_diffusivity_from_gradient(
+            temperature=T,
+            dr=dr,
+            threshold=convective_gradient_threshold,
+            strength=convective_strength,
+        )
+    total_diffusivity = radiative_diffusivity + convective_diffusivity
+    flux = interface_flux(T, total_diffusivity, dr)
     r_interface = 0.5 * (r[:-1] + r[1:])
     luminosity = r_interface**2 * flux
 
@@ -83,8 +133,13 @@ def relax_to_equilibrium(
         "temperature": T,
         "source": source,
         "kappa": kappa,
-        "diffusivity": diffusivity_profile,
+        "radiative_diffusivity": radiative_diffusivity,
+        "convective_diffusivity": convective_diffusivity,
+        "diffusivity": total_diffusivity,
         "temperature_gradient": np.diff(T) / dr,
+        "convective_excess": convective_excess,
+        "convective_gradient_threshold": convective_gradient_threshold,
+        "enable_convection": enable_convection,
         "flux": flux,
         "luminosity": luminosity,
         "r_interface": r_interface,
