@@ -20,4 +20,50 @@ def plot_equilibrium(result: dict, save_path: str = "outputs/radiative_equilibri
     plt.tight_layout()
     plt.savefig(save_path, dpi=180)
     plt.close(fig)
-    
+
+
+def plot_transport_diagnostics(
+    result: dict,
+    save_path: str = "outputs/transport_diagnostics.png",
+) -> None:
+    r = result["r"]
+    r_interface = result["r_interface"]
+    T = result["temperature"]
+    kappa = result["kappa"]
+    diffusivity = result["diffusivity"]
+    flux = result["flux"]
+    luminosity = result["luminosity"]
+    gradient = result["temperature_gradient"]
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharex="col")
+
+    axes[0, 0].plot(r, T)
+    axes[0, 0].set_ylabel("T")
+    axes[0, 0].set_title("Temperature")
+
+    axes[0, 1].plot(r, kappa, label="kappa")
+    axes[0, 1].plot(r, diffusivity, label="D")
+    axes[0, 1].set_yscale("log")
+    axes[0, 1].set_ylabel("log scale")
+    axes[0, 1].set_title("Opacity and diffusivity")
+    axes[0, 1].legend()
+
+    axes[1, 0].plot(r_interface, gradient)
+    axes[1, 0].set_xlabel("Normalized radius r/R")
+    axes[1, 0].set_ylabel("dT/dr")
+    axes[1, 0].set_title("Temperature gradient")
+
+    axes[1, 1].plot(r_interface, flux, label="flux")
+    axes[1, 1].plot(r_interface, luminosity, label="r^2 flux")
+    axes[1, 1].set_xlabel("Normalized radius r/R")
+    axes[1, 1].set_ylabel("Magnitude")
+    axes[1, 1].set_title("Flux and luminosity")
+    axes[1, 1].legend()
+
+    for ax in axes.flat:
+        ax.grid(True, alpha=0.3)
+
+    fig.suptitle("Transport diagnostics")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=180)
+    plt.close(fig)
