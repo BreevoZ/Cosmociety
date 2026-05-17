@@ -7,12 +7,12 @@ from .transport import diffusion_step
 
 def relax_to_equilibrium(
     n: int = 200,
-    dt: float = 0.01,
+    dt: float = 1e-5,
     diffusivity: float = 0.5,
     surface_temperature: float = 0.1,
-    max_steps: int = 20_000,
-    tolerance: float = 1e-8,
-    save_every: int = 100,
+    max_steps: int = 500_000,
+    tolerance: float = 1e-7,
+    save_every: int = 1000,
 ) -> dict:
     """
     Relax the toy stellar temperature profile toward equilibrium.
@@ -27,6 +27,7 @@ def relax_to_equilibrium(
     deltas = []
 
     converged_step = None
+    dr = r[1] - r[0]
 
     for step in range(max_steps):
         old_T = T.copy()
@@ -37,6 +38,7 @@ def relax_to_equilibrium(
             dt=dt,
             diffusivity=diffusivity,
             surface_temperature=surface_temperature,
+            dr=dr,
         )
 
         delta = float(np.max(np.abs(T - old_T)))

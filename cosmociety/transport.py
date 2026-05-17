@@ -7,26 +7,15 @@ def diffusion_step(
     dt: float,
     diffusivity: float,
     surface_temperature: float,
+    dr: float,
 ) -> np.ndarray:
-    """
-    One explicit diffusion step with core heating and fixed surface temperature.
-
-    This is the simplest toy model:
-
-        dT/dt = diffusivity * d²T/dr² + source
-
-    Boundary conditions:
-        center: dT/dr = 0
-        surface: T = surface_temperature
-    """
     T = temperature.copy()
 
     laplacian = np.zeros_like(T)
-    laplacian[1:-1] = T[:-2] - 2.0 * T[1:-1] + T[2:]
+    laplacian[1:-1] = (T[:-2] - 2.0 * T[1:-1] + T[2:]) / dr**2
 
     T += dt * (diffusivity * laplacian + source)
 
-    # Boundary conditions
     T[0] = T[1]
     T[-1] = surface_temperature
 
