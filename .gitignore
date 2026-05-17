@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.gif
+*.png
+.vscode/
+.ipynb_checkpoints/
