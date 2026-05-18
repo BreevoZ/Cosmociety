@@ -29,6 +29,7 @@ def plot_transport_diagnostics(
     r = result["r"]
     r_interface = result["r_interface"]
     T = result["temperature"]
+    density = result["density"]
     kappa = result["kappa"]
     diffusivity = result["diffusivity"]
     radiative_diffusivity = result["radiative_diffusivity"]
@@ -36,7 +37,7 @@ def plot_transport_diagnostics(
     flux = result["flux"]
     luminosity = result["luminosity"]
     gradient = result["temperature_gradient"]
-    threshold = result["convective_gradient_threshold"]
+    threshold = result["convective_threshold"]
     criterion = result.get("convective_criterion", "gradient")
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharex="col")
@@ -46,6 +47,7 @@ def plot_transport_diagnostics(
     axes[0, 0].set_title("Temperature")
 
     axes[0, 1].plot(r, kappa, label="kappa")
+    axes[0, 1].plot(r, density, label="rho")
     axes[0, 1].plot(r, radiative_diffusivity, label="D_rad")
     axes[0, 1].plot(r, convective_diffusivity, label="D_conv")
     axes[0, 1].plot(r, diffusivity, label="D_total")

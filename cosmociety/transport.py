@@ -30,6 +30,7 @@ def diffusion_step(
     source: np.ndarray,
     dt: float,
     diffusivity: float | np.ndarray,
+    heat_capacity: float | np.ndarray,
     space_temperature: float,
     surface_cooling: float,
     dr: float,
@@ -41,8 +42,7 @@ def diffusion_step(
 
     Solves the toy equation in either cartesian or spherical form:
 
-        cartesian: dT/dt = d/dr [ D(r) dT/dr ] + source
-        spherical: dT/dt = 1/r^2 d/dr [ r^2 D(r) dT/dr ] + source
+        C(r) dT/dt = div[ D(r) grad(T) ] + source
 
     Surface is not fixed anymore.
     Instead, the outer boundary cools radiatively:
@@ -53,6 +53,15 @@ def diffusion_step(
     outermost cell.
     """
     T = temperature.copy()
+    if np.isscalar(heat_capacity):
+        C = np.full_like(T, float(heat_capacity))
+    else:
+        C = np.asarray(heat_capacity, dtype=float)
+
+    if C.shape != T.shape:
+        raise ValueError("heat_capacity must be a scalar or have the same shape as temperature")
+    if np.any(C <= 0):
+        raise ValueError("heat_capacity must be positive everywhere")
 
     # Heat flux across interfaces
     flux = interface_flux(T, diffusivity, dr)
@@ -79,14 +88,14 @@ def diffusion_step(
         raise ValueError("geometry must be 'cartesian' or 'spherical'")
 
     # Heating
-    T += dt * (dT + source)
+    T += dt * (dT + source) / C
 
     # Center symmetry
     T[0] = T[1]
 
     # Radiative cooling at surface
     cooling = surface_cooling * (T[-1]**4 - space_temperature**4)
-    T[-1] -= dt * cooling / dr
+    T[-1] -= dt * cooling / (C[-1] * dr)
 
     # Numerical safety
     T = np.maximum(T, space_temperature)
