@@ -1,4 +1,5 @@
 from cosmociety.equilibrium import relax_to_equilibrium
+from cosmociety.diagnostics import format_summary, summarize_result
 from cosmociety.visualize import plot_equilibrium, plot_transport_diagnostics
 from cosmociety.animation import animate_relaxation
 
@@ -16,6 +17,7 @@ def main():
 
     print("Simulation complete.")
     print(f"Converged step: {result['converged_step']}")
+    print(format_summary(summarize_result(result)))
 
 
 if __name__ == "__main__":

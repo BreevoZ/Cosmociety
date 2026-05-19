@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 *.gif
 *.png
+outputs/*.csv
 .vscode/
 .ipynb_checkpoints/
