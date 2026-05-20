@@ -1,0 +1,16 @@
+case: baseline_envelope
+mode: preview
+description: Radiative interior with a convective outer envelope.
+
+converged: no
+final_delta: 5.216e-07
+T_center/T_surface: 12.980
+T_center: 1.095
+T_surface: 0.084
+convective_fraction: 0.460
+convective_regions: 0.545-1.000
+convective_region_count: 1
+convective_transport: excess
+max_D_rad: 4.951e-02
+max_D_conv: 1.000e-03
+max_luminosity: 5.977e-04

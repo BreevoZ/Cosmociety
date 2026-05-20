@@ -39,6 +39,7 @@ def plot_transport_diagnostics(
     gradient = result["temperature_gradient"]
     threshold = result["convective_threshold"]
     criterion = result.get("convective_criterion", "gradient")
+    transport = result.get("convective_transport", "diffusive")
 
     fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharex="col")
 
@@ -61,7 +62,7 @@ def plot_transport_diagnostics(
         axes[1, 0].axhline(-threshold, color="black", linestyle="--", linewidth=1)
     axes[1, 0].set_xlabel("Normalized radius r/R")
     axes[1, 0].set_ylabel("dT/dr")
-    axes[1, 0].set_title(f"Temperature gradient ({criterion} convection)")
+    axes[1, 0].set_title(f"Temperature gradient ({criterion}/{transport})")
 
     axes[1, 1].plot(r_interface, flux, label="flux")
     axes[1, 1].plot(r_interface, luminosity, label="r^2 flux")

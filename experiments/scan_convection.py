@@ -49,6 +49,7 @@ FIELDS = [
     "opacity_power",
     "convective_max_diffusivity",
     "convective_nabla_ad",
+    "convective_transport",
     "converged",
     "converged_step",
     "final_delta",

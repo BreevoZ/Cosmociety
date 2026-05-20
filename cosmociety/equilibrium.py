@@ -130,6 +130,43 @@ def convective_diffusivity_from_schwarzschild(
     return cell_diffusivity, excess, nabla_rad
 
 
+def convective_flux_from_adiabatic_excess(
+    temperature: np.ndarray,
+    pressure: np.ndarray,
+    convective_diffusivity: np.ndarray,
+    dr: float,
+    nabla_ad: float,
+) -> np.ndarray:
+    """
+    Return convective flux that only transports superadiabatic temperature drop.
+
+    The target retained gradient is the toy adiabatic gradient:
+
+        dT/dr_ad = nabla_ad * T/P * dP/dr
+
+    Since outward heat flux is positive, this uses outward temperature drops.
+    """
+    outward_temperature_drop = -np.diff(temperature) / dr
+    outward_pressure_drop = np.maximum(-np.diff(pressure) / dr, 0.0)
+    temperature_interface = 0.5 * (temperature[:-1] + temperature[1:])
+    pressure_interface = 0.5 * (pressure[:-1] + pressure[1:])
+    diffusivity_interface = 0.5 * (
+        convective_diffusivity[:-1] + convective_diffusivity[1:]
+    )
+
+    adiabatic_temperature_drop = (
+        nabla_ad
+        * temperature_interface
+        * outward_pressure_drop
+        / np.maximum(pressure_interface, 1e-30)
+    )
+    superadiabatic_drop = np.maximum(
+        outward_temperature_drop - adiabatic_temperature_drop,
+        0.0,
+    )
+    return diffusivity_interface * superadiabatic_drop
+
+
 def relax_to_equilibrium(
     n: int = 200,
     dt: float = 1e-5,
@@ -154,6 +191,7 @@ def relax_to_equilibrium(
     convective_strength: float = 0.05,
     convective_max_diffusivity: float = 1e-3,
     convective_criterion: str = "schwarzschild",
+    convective_transport: str = "excess",
 ) -> dict:
     """
     Relax the toy stellar temperature profile toward equilibrium.
@@ -187,6 +225,8 @@ def relax_to_equilibrium(
         raise ValueError(
             "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
         )
+    if convective_transport not in {"diffusive", "excess"}:
+        raise ValueError("convective_transport must be 'diffusive' or 'excess'")
 
     for step in range(max_steps):
         old_T = T.copy()
@@ -233,8 +273,21 @@ def relax_to_equilibrium(
                     "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
                 )
 
-        total_diffusivity = radiative_diffusivity + convective_diffusivity
-        max_effective_diffusivity = float(np.max(total_diffusivity / heat_capacity))
+        effective_diffusivity = radiative_diffusivity + convective_diffusivity
+        if convective_transport == "diffusive":
+            step_diffusivity = effective_diffusivity
+            extra_interface_flux = None
+        else:
+            step_diffusivity = radiative_diffusivity
+            extra_interface_flux = convective_flux_from_adiabatic_excess(
+                temperature=T,
+                pressure=pressure,
+                convective_diffusivity=convective_diffusivity,
+                dr=dr,
+                nabla_ad=convective_nabla_ad,
+            )
+
+        max_effective_diffusivity = float(np.max(effective_diffusivity / heat_capacity))
         stable_dt = stability_safety * dr**2 / max_effective_diffusivity
         step_dt = min(dt, stable_dt)
 
@@ -242,13 +295,14 @@ def relax_to_equilibrium(
             temperature=T,
             source=source,
             dt=step_dt,
-            diffusivity=total_diffusivity,
+            diffusivity=step_diffusivity,
             heat_capacity=heat_capacity,
             space_temperature=space_temperature,
             surface_cooling=surface_cooling,
             dr=dr,
             radius=r,
             geometry=geometry,
+            extra_interface_flux=extra_interface_flux,
         )
 
         delta = float(np.max(np.abs(T - old_T)))
@@ -321,7 +375,18 @@ def relax_to_equilibrium(
                 "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
             )
     total_diffusivity = radiative_diffusivity + convective_diffusivity
-    flux = interface_flux(T, total_diffusivity, dr)
+    radiative_flux = interface_flux(T, radiative_diffusivity, dr)
+    if convective_transport == "diffusive":
+        convective_flux = interface_flux(T, convective_diffusivity, dr)
+    else:
+        convective_flux = convective_flux_from_adiabatic_excess(
+            temperature=T,
+            pressure=pressure,
+            convective_diffusivity=convective_diffusivity,
+            dr=dr,
+            nabla_ad=convective_nabla_ad,
+        )
+    flux = radiative_flux + convective_flux
     r_interface = 0.5 * (r[:-1] + r[1:])
     luminosity = r_interface**2 * flux
 
@@ -350,7 +415,11 @@ def relax_to_equilibrium(
         "nabla_rad": nabla_rad,
         "convective_max_diffusivity": convective_max_diffusivity,
         "convective_criterion": convective_criterion,
+        "convective_transport": convective_transport,
         "enable_convection": enable_convection,
+        "surface_cooling": surface_cooling,
+        "radiative_flux": radiative_flux,
+        "convective_flux": convective_flux,
         "flux": flux,
         "luminosity": luminosity,
         "r_interface": r_interface,

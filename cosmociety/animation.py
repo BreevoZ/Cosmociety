@@ -21,11 +21,13 @@ def animate_relaxation(
     threshold = result.get("convective_threshold")
     show_convection = bool(result.get("enable_convection", False)) and threshold is not None
     criterion = result.get("convective_criterion", "gradient")
+    convective_transport = result.get("convective_transport", "diffusive")
     opacity_power = result.get("opacity_power")
     diffusivity_scale = result.get("radiative_diffusivity_scale")
     diffusivity_floor = result.get("radiative_diffusivity_floor", 0.0)
     convective_strength = result.get("convective_strength", 0.05)
     convective_max_diffusivity = result.get("convective_max_diffusivity", 0.05)
+    convective_nabla_ad = result.get("convective_nabla_ad", threshold)
     dr = r[1] - r[0]
     r_interface = 0.5 * (r[:-1] + r[1:])
     source_shells = source * r**2 * dr
@@ -191,10 +193,40 @@ def animate_relaxation(
         )
         return cell_centered_from_interface(interface_diffusivity)
 
-    def flux_from_diffusivity(T, diffusivity):
+    def convective_flux_from_adiabatic_excess(T, D_conv):
+        pressure = density**pressure_density_power * T
+        outward_temperature_drop = -np.diff(T) / dr
+        outward_pressure_drop = np.maximum(-np.diff(pressure) / dr, 0.0)
+        temperature_interface = 0.5 * (T[:-1] + T[1:])
+        pressure_interface = 0.5 * (pressure[:-1] + pressure[1:])
+        diffusivity_interface = 0.5 * (D_conv[:-1] + D_conv[1:])
+        adiabatic_temperature_drop = (
+            convective_nabla_ad
+            * temperature_interface
+            * outward_pressure_drop
+            / np.maximum(pressure_interface, 1e-30)
+        )
+        superadiabatic_drop = np.maximum(
+            outward_temperature_drop - adiabatic_temperature_drop,
+            0.0,
+        )
+        return diffusivity_interface * superadiabatic_drop
+
+    def flux_from_components(T, D_rad, D_conv):
+        radiative_flux = interface_flux_from_diffusivity(T, D_rad)
+        if convective_transport == "diffusive":
+            convective_flux = interface_flux_from_diffusivity(T, D_conv)
+        elif convective_transport == "excess":
+            convective_flux = convective_flux_from_adiabatic_excess(T, D_conv)
+        else:
+            raise ValueError("convective_transport must be 'diffusive' or 'excess'")
+        flux = radiative_flux + convective_flux
+        return flux, r_interface**2 * flux
+
+    def interface_flux_from_diffusivity(T, diffusivity):
         diffusivity_interface = 0.5 * (diffusivity[:-1] + diffusivity[1:])
         flux = -diffusivity_interface * np.diff(T) / dr
-        return flux, r_interface**2 * flux
+        return flux
 
     flux_min = 0.0
     flux_max = 1.0
@@ -207,9 +239,10 @@ def animate_relaxation(
             if show_convection:
                 _, excess_frame = convective_interfaces(T_frame)
             D_conv_frame = convective_diffusivity_from_excess(excess_frame)
-            flux_frame, luminosity_frame = flux_from_diffusivity(
+            flux_frame, luminosity_frame = flux_from_components(
                 T_frame,
-                D_rad_frame + D_conv_frame,
+                D_rad_frame,
+                D_conv_frame,
             )
             flux_values.append(flux_frame)
             luminosity_values.append(luminosity_frame)
@@ -271,7 +304,7 @@ def animate_relaxation(
 
         D_conv = convective_diffusivity_from_excess(excess)
         D_total = D_rad + D_conv
-        flux, luminosity = flux_from_diffusivity(T, D_total)
+        flux, luminosity = flux_from_components(T, D_rad, D_conv)
 
         d_rad_line.set_data(r, D_rad)
         d_conv_line.set_data(r, np.maximum(D_conv, transport_floor))
@@ -283,7 +316,7 @@ def animate_relaxation(
         status_text.set_text(
             f"frame {frame:03d}/{len(history)-1:03d} | "
             f"conv {active_fraction:6.2%} | "
-            f"{criterion}"
+            f"{criterion}/{convective_transport}"
         )
 
         return (

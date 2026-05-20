@@ -36,6 +36,7 @@ def diffusion_step(
     dr: float,
     radius: np.ndarray | None = None,
     geometry: str = "spherical",
+    extra_interface_flux: np.ndarray | None = None,
 ) -> np.ndarray:
     """
     One explicit flux-form diffusion step with radiative surface cooling.
@@ -65,6 +66,11 @@ def diffusion_step(
 
     # Heat flux across interfaces
     flux = interface_flux(T, diffusivity, dr)
+    if extra_interface_flux is not None:
+        extra_flux = np.asarray(extra_interface_flux, dtype=float)
+        if extra_flux.shape != flux.shape:
+            raise ValueError("extra_interface_flux must have one value per interface")
+        flux = flux + extra_flux
 
     # Flux divergence
     dT = np.zeros_like(T)

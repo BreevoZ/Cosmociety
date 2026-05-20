@@ -36,6 +36,12 @@ def parse_args():
         default=None,
         help="Frames per second for the generated GIF.",
     )
+    parser.add_argument(
+        "--convective-transport",
+        choices=["excess", "diffusive"],
+        default=None,
+        help="Override the convective transport law for this run.",
+    )
     return parser.parse_args()
 
 
@@ -46,11 +52,15 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     params = dict(case["params"])
-    suffix = ""
+    if args.convective_transport is not None:
+        params["convective_transport"] = args.convective_transport
+
+    transport = params.get("convective_transport", "excess")
+    suffix = f"_{transport}"
     mode = "equilibrium"
     if args.preview:
         mode = "preview"
-        suffix = "_preview"
+        suffix = f"_{transport}_preview"
         params.update(
             {
                 "n": 100,
