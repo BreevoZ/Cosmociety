@@ -152,7 +152,7 @@ def relax_to_equilibrium(
     convective_radiative_threshold: float = 75_000.0,
     convective_nabla_ad: float = 0.4,
     convective_strength: float = 0.05,
-    convective_max_diffusivity: float = 0.001,
+    convective_max_diffusivity: float = 1e-3,
     convective_criterion: str = "schwarzschild",
 ) -> dict:
     """
@@ -346,6 +346,7 @@ def relax_to_equilibrium(
         "convective_gradient_threshold": convective_gradient_threshold,
         "convective_radiative_threshold": convective_radiative_threshold,
         "convective_nabla_ad": convective_nabla_ad,
+        "convective_strength": convective_strength,
         "nabla_rad": nabla_rad,
         "convective_max_diffusivity": convective_max_diffusivity,
         "convective_criterion": convective_criterion,

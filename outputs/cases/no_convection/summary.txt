@@ -1,0 +1,14 @@
+case: no_convection
+description: Radiative-only reference run.
+
+converged: yes, step 3416285
+final_delta: 3.000e-08
+T_center/T_surface: 12.713
+T_center: 1.120
+T_surface: 0.088
+convective_fraction: 0.000
+convective_regions: none
+convective_region_count: 0
+max_D_rad: 6.223e-02
+max_D_conv: 0.000e+00
+max_luminosity: 7.603e-04

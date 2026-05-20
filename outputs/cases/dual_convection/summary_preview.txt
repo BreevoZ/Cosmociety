@@ -1,0 +1,15 @@
+case: dual_convection
+mode: preview
+description: Small convective core plus convective outer envelope.
+
+converged: no
+final_delta: 3.033e-07
+T_center/T_surface: 11.639
+T_center: 1.099
+T_surface: 0.094
+convective_fraction: 0.540
+convective_regions: 0.010-0.141;0.606-1.000
+convective_region_count: 2
+max_D_rad: 4.252e-02
+max_D_conv: 5.000e-04
+max_luminosity: 7.913e-04
