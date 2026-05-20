@@ -23,6 +23,7 @@ def animate_relaxation(
     criterion = result.get("convective_criterion", "gradient")
     convective_transport = result.get("convective_transport", "diffusive")
     opacity_power = result.get("opacity_power")
+    radiative_density_power = result.get("radiative_density_power", 0.0)
     diffusivity_scale = result.get("radiative_diffusivity_scale")
     diffusivity_floor = result.get("radiative_diffusivity_floor", 0.0)
     convective_strength = result.get("convective_strength", 0.05)
@@ -176,7 +177,12 @@ def animate_relaxation(
     def radiative_diffusivity(T):
         if opacity_power is None or diffusivity_scale is None:
             return np.full_like(T, diffusivity_floor)
-        return np.maximum(diffusivity_scale * T**opacity_power, diffusivity_floor)
+        density_contrast = density / max(float(density[-1]), 1e-30)
+        density_factor = np.maximum(density_contrast**radiative_density_power, 1e-30)
+        return np.maximum(
+            diffusivity_scale * T**opacity_power / density_factor,
+            diffusivity_floor,
+        )
 
     def cell_centered_from_interface(interface_values):
         cell_values = np.zeros(len(interface_values) + 1)

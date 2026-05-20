@@ -8,6 +8,14 @@ from cosmociety.animation import animate_relaxation
 from experiments.demo_cases import case_names, get_case
 
 
+PREVIEW_PARAMS = {
+    "n": 100,
+    "max_steps": 60_000,
+    "save_every": 3_000,
+    "tolerance": -1.0,
+}
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Run a Cosmociety demo case.")
     parser.add_argument(
@@ -42,37 +50,53 @@ def parse_args():
         default=None,
         help="Override the convective transport law for this run.",
     )
+    parser.add_argument(
+        "--surface-cooling",
+        type=float,
+        default=None,
+        help="Override the radiative surface cooling strength.",
+    )
+    parser.add_argument(
+        "--convective-max-diffusivity",
+        type=float,
+        default=None,
+        help="Override the maximum convective diffusivity.",
+    )
+    parser.add_argument(
+        "--radiative-density-power",
+        type=float,
+        default=None,
+        help="Override density dependence in D_rad = D0 * T^p / (rho/rho_surface)^q.",
+    )
     return parser.parse_args()
 
 
-def main():
-    args = parse_args()
-    case = get_case(args.case)
-    output_dir = args.output_dir or Path("outputs") / "cases" / args.case
+def run_case(
+    case_name: str,
+    output_dir: Path | None = None,
+    preview: bool = False,
+    fps: int | None = None,
+    overrides: dict | None = None,
+) -> dict:
+    case = get_case(case_name)
+    output_dir = output_dir or Path("outputs") / "cases" / case_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     params = dict(case["params"])
-    if args.convective_transport is not None:
-        params["convective_transport"] = args.convective_transport
+    if overrides:
+        params.update({key: value for key, value in overrides.items() if value is not None})
 
     transport = params.get("convective_transport", "excess")
     suffix = f"_{transport}"
     mode = "equilibrium"
-    if args.preview:
+    if preview:
         mode = "preview"
         suffix = f"_{transport}_preview"
-        params.update(
-            {
-                "n": 100,
-                "max_steps": 60_000,
-                "save_every": 3_000,
-                "tolerance": -1.0,
-            }
-        )
+        params.update(PREVIEW_PARAMS)
 
     result = relax_to_equilibrium(**params)
 
-    if result["converged_step"] is None and not args.preview:
+    if result["converged_step"] is None and not preview:
         raise RuntimeError("Simulation did not reach equilibrium; skipping diagnostics.")
 
     plot_equilibrium(result, save_path=str(output_dir / f"radiative_equilibrium{suffix}.png"))
@@ -81,7 +105,7 @@ def main():
         save_path=str(output_dir / f"transport_diagnostics{suffix}.png"),
     )
 
-    fps = args.fps if args.fps is not None else (10 if args.preview else 30)
+    fps = fps if fps is not None else (10 if preview else 30)
     animate_relaxation(
         result,
         save_path=str(output_dir / f"radiative_relaxation{suffix}.gif"),
@@ -90,19 +114,46 @@ def main():
 
     summary = format_summary(summarize_result(result))
     (output_dir / f"summary{suffix}.txt").write_text(
-        f"case: {args.case}\n"
+        f"case: {case_name}\n"
         f"mode: {mode}\n"
         f"description: {case['description']}\n\n"
         f"{summary}\n"
     )
 
-    print(f"Case: {args.case}")
+    print(f"Case: {case_name}")
     print(f"Mode: {mode}")
     print(case["description"])
     print("Simulation complete.")
     print(f"Output directory: {output_dir}")
     print(f"Converged step: {result['converged_step']}")
     print(summary)
+
+    return {
+        "case": case_name,
+        "mode": mode,
+        "output_dir": output_dir,
+        "suffix": suffix,
+        "result": result,
+        "summary": summary,
+    }
+
+
+def main():
+    args = parse_args()
+    output_dir = args.output_dir or Path("outputs") / "cases" / args.case
+    overrides = {
+        "convective_transport": args.convective_transport,
+        "surface_cooling": args.surface_cooling,
+        "convective_max_diffusivity": args.convective_max_diffusivity,
+        "radiative_density_power": args.radiative_density_power,
+    }
+    run_case(
+        case_name=args.case,
+        output_dir=output_dir,
+        preview=args.preview,
+        fps=args.fps,
+        overrides=overrides,
+    )
 
 
 if __name__ == "__main__":

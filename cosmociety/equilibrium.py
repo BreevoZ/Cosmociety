@@ -167,6 +167,35 @@ def convective_flux_from_adiabatic_excess(
     return diffusivity_interface * superadiabatic_drop
 
 
+def opacity_from_state(
+    temperature: np.ndarray,
+    density: np.ndarray,
+    opacity_power: float,
+    radiative_density_power: float,
+) -> np.ndarray:
+    """Toy opacity law: kappa = (rho / rho_surface)^q T^-p."""
+    density_contrast = density / max(float(density[-1]), 1e-30)
+    return density_contrast**radiative_density_power * temperature ** (-opacity_power)
+
+
+def radiative_diffusivity_from_state(
+    temperature: np.ndarray,
+    density: np.ndarray,
+    diffusivity_scale: float,
+    opacity_power: float,
+    radiative_density_power: float,
+    diffusivity_floor: float,
+) -> np.ndarray:
+    """Toy radiative diffusivity: D_rad = D0 / kappa."""
+    kappa = opacity_from_state(
+        temperature=temperature,
+        density=density,
+        opacity_power=opacity_power,
+        radiative_density_power=radiative_density_power,
+    )
+    return np.maximum(diffusivity_scale / kappa, diffusivity_floor)
+
+
 def relax_to_equilibrium(
     n: int = 200,
     dt: float = 1e-5,
@@ -178,6 +207,7 @@ def relax_to_equilibrium(
     save_every: int = 5000,
     stability_safety: float = 0.2,
     opacity_power: float = 10.0,
+    radiative_density_power: float = 0.1,
     radiative_diffusivity_floor: float = 1e-8,
     surface_density: float = 0.1,
     central_density: float = 1.0,
@@ -231,8 +261,14 @@ def relax_to_equilibrium(
     for step in range(max_steps):
         old_T = T.copy()
         pressure = density**pressure_density_power * T
-        kappa = T ** (-opacity_power)
-        radiative_diffusivity = np.maximum(diffusivity / kappa, radiative_diffusivity_floor)
+        radiative_diffusivity = radiative_diffusivity_from_state(
+            temperature=T,
+            density=density,
+            diffusivity_scale=diffusivity,
+            opacity_power=opacity_power,
+            radiative_density_power=radiative_density_power,
+            diffusivity_floor=radiative_diffusivity_floor,
+        )
         convective_diffusivity = np.zeros_like(T)
         if enable_convection:
             if convective_criterion == "gradient":
@@ -323,11 +359,20 @@ def relax_to_equilibrium(
             history.append(T.copy())
             break
 
-    kappa = T ** (-opacity_power)
+    kappa = opacity_from_state(
+        temperature=T,
+        density=density,
+        opacity_power=opacity_power,
+        radiative_density_power=radiative_density_power,
+    )
     pressure = density**pressure_density_power * T
-    radiative_diffusivity = np.maximum(
-        diffusivity * T ** opacity_power,
-        radiative_diffusivity_floor,
+    radiative_diffusivity = radiative_diffusivity_from_state(
+        temperature=T,
+        density=density,
+        diffusivity_scale=diffusivity,
+        opacity_power=opacity_power,
+        radiative_density_power=radiative_density_power,
+        diffusivity_floor=radiative_diffusivity_floor,
     )
     convective_diffusivity = np.zeros_like(T)
     convective_excess = np.zeros(len(T) - 1)
@@ -400,6 +445,7 @@ def relax_to_equilibrium(
         "heat_capacity": heat_capacity,
         "kappa": kappa,
         "opacity_power": opacity_power,
+        "radiative_density_power": radiative_density_power,
         "radiative_diffusivity_scale": diffusivity,
         "radiative_diffusivity_floor": radiative_diffusivity_floor,
         "radiative_diffusivity": radiative_diffusivity,

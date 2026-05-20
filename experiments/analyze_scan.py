@@ -10,6 +10,7 @@ DEFAULT_OUTPUT = Path("outputs/convection_scan_report.txt")
 
 FLOAT_FIELDS = {
     "opacity_power",
+    "radiative_density_power",
     "convective_max_diffusivity",
     "convective_nabla_ad",
     "final_delta",

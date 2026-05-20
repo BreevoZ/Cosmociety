@@ -39,6 +39,7 @@ FIELDS = [
     "convective_transport",
     "surface_cooling",
     "convective_max_diffusivity",
+    "radiative_density_power",
     "converged",
     "converged_step",
     "final_delta",
