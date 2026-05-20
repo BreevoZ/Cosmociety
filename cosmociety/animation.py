@@ -22,8 +22,14 @@ def animate_relaxation(
     show_convection = bool(result.get("enable_convection", False)) and threshold is not None
     criterion = result.get("convective_criterion", "gradient")
     convective_transport = result.get("convective_transport", "diffusive")
-    opacity_power = result.get("opacity_power")
-    radiative_density_power = result.get("radiative_density_power", 0.0)
+    opacity_temperature_power = result.get(
+        "opacity_temperature_power",
+        result.get("opacity_power"),
+    )
+    opacity_density_power = result.get(
+        "opacity_density_power",
+        result.get("radiative_density_power", 0.0),
+    )
     diffusivity_scale = result.get("radiative_diffusivity_scale")
     diffusivity_floor = result.get("radiative_diffusivity_floor", 0.0)
     convective_strength = result.get("convective_strength", 0.05)
@@ -130,7 +136,7 @@ def animate_relaxation(
             return active, excess
 
         if criterion == "radiative":
-            if opacity_power is None or diffusivity_scale is None:
+            if opacity_temperature_power is None or diffusivity_scale is None:
                 raise ValueError(
                     "Radiative convection animation requires opacity_power and "
                     "radiative_diffusivity_scale in result."
@@ -147,7 +153,7 @@ def animate_relaxation(
             return active, excess
 
         if criterion == "schwarzschild":
-            if opacity_power is None or diffusivity_scale is None:
+            if opacity_temperature_power is None or diffusivity_scale is None:
                 raise ValueError(
                     "Schwarzschild convection animation requires opacity_power "
                     "and radiative_diffusivity_scale in result."
@@ -175,12 +181,12 @@ def animate_relaxation(
         )
 
     def radiative_diffusivity(T):
-        if opacity_power is None or diffusivity_scale is None:
+        if opacity_temperature_power is None or diffusivity_scale is None:
             return np.full_like(T, diffusivity_floor)
         density_contrast = density / max(float(density[-1]), 1e-30)
-        density_factor = np.maximum(density_contrast**radiative_density_power, 1e-30)
+        density_factor = np.maximum(density_contrast**opacity_density_power, 1e-30)
         return np.maximum(
-            diffusivity_scale * T**opacity_power / density_factor,
+            diffusivity_scale * T**opacity_temperature_power / density_factor,
             diffusivity_floor,
         )
 

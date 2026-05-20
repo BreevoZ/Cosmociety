@@ -16,7 +16,7 @@ OUTPUT_PATH = Path("outputs/convection_scan.csv")
 
 
 SCAN = {
-    "opacity_power": [8.0, 10.0, 12.0],
+    "opacity_temperature_power": [8.0, 10.0, 12.0],
     "convective_max_diffusivity": [5e-4, 1e-3, 2e-3],
     "convective_nabla_ad": [0.35, 0.4, 0.45],
 }
@@ -30,7 +30,7 @@ BASE_PARAMS = {
 }
 
 QUICK_SCAN = {
-    "opacity_power": [8.0, 10.0],
+    "opacity_temperature_power": [8.0, 10.0],
     "convective_max_diffusivity": [5e-4, 1e-3],
     "convective_nabla_ad": [0.4],
 }
@@ -46,10 +46,12 @@ QUICK_PARAMS = {
 
 FIELDS = [
     "run",
-    "opacity_power",
+    "opacity_temperature_power",
+    "opacity_density_power",
     "convective_max_diffusivity",
     "convective_nabla_ad",
     "convective_transport",
+    "opacity_power",
     "radiative_density_power",
     "converged",
     "converged_step",
@@ -85,7 +87,7 @@ def print_row(row):
 
     print(
         f"{row['run']:02d} {status:4s} "
-        f"p={row['opacity_power']:<4.1f} "
+        f"p={row['opacity_temperature_power']:<4.1f} "
         f"Dcmax={row['convective_max_diffusivity']:<7.1e} "
         f"nad={row['convective_nabla_ad']:<4.2f} "
         f"conv={row['convective_fraction']:<5.2f} "

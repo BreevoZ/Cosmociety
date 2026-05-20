@@ -9,6 +9,8 @@ DEFAULT_OUTPUT = Path("outputs/convection_scan_report.txt")
 
 
 FLOAT_FIELDS = {
+    "opacity_temperature_power",
+    "opacity_density_power",
     "opacity_power",
     "radiative_density_power",
     "convective_max_diffusivity",
@@ -62,10 +64,14 @@ def parse_value(key, value):
 def read_rows(path):
     with path.open(newline="") as file:
         reader = csv.DictReader(file)
-        return [
+        rows = [
             {key: parse_value(key, value) for key, value in row.items()}
             for row in reader
         ]
+    for row in rows:
+        row.setdefault("opacity_temperature_power", row.get("opacity_power"))
+        row.setdefault("opacity_density_power", row.get("radiative_density_power"))
+    return rows
 
 
 def mean(values):
@@ -94,7 +100,7 @@ def runs(rows):
 def group_by(rows, key):
     groups = defaultdict(list)
     for row in rows:
-        groups[row[key]].append(row)
+        groups[row.get(key)].append(row)
     return dict(sorted(groups.items()))
 
 
@@ -143,7 +149,7 @@ def build_report(rows):
         for row in multi_region_rows:
             lines.append(
                 f"  run {row['run']}: regions={row['convective_regions']} "
-                f"p={fmt(row['opacity_power'])} "
+                f"p={fmt(row.get('opacity_temperature_power') or row.get('opacity_power'))} "
                 f"Dconv_max={fmt(row['convective_max_diffusivity'])} "
                 f"nabla_ad={fmt(row['convective_nabla_ad'])}"
             )
@@ -161,7 +167,7 @@ def build_report(rows):
         for row in open_rows:
             lines.append(
                 f"  run {row['run']}: delta={fmt(row['final_delta'])} "
-                f"p={fmt(row['opacity_power'])} "
+                f"p={fmt(row.get('opacity_temperature_power') or row.get('opacity_power'))} "
                 f"Dconv_max={fmt(row['convective_max_diffusivity'])} "
                 f"nabla_ad={fmt(row['convective_nabla_ad'])}"
             )
@@ -173,8 +179,8 @@ def build_report(rows):
             "",
             "Parameter Trends",
             "-" * 16,
-            "opacity_power:",
-            *trend_table(rows, "opacity_power"),
+            "opacity_temperature_power:",
+            *trend_table(rows, "opacity_temperature_power"),
             "",
             "convective_max_diffusivity:",
             *trend_table(rows, "convective_max_diffusivity"),
@@ -215,7 +221,7 @@ def build_report(rows):
             "-" * 20,
             "- multi-region runs indicate separated convective zones, usually core + envelope.",
             "- open runs are useful for trends, but should not be treated as strict equilibrium.",
-            "- increasing opacity_power usually moves the convective envelope inward.",
+            "- increasing opacity_temperature_power usually moves the convective envelope inward.",
             "- increasing Dconv_max tends to lower Tc/Ts by strengthening heat transport.",
         ]
     )

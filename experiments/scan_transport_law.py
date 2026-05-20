@@ -29,7 +29,7 @@ BASE_PARAMS = {
     "max_steps": 180_000,
     "tolerance": 2e-7,
     "save_every": 30_000,
-    "opacity_power": 10.0,
+    "opacity_temperature_power": 10.0,
     "convective_nabla_ad": 0.4,
 }
 
@@ -39,6 +39,8 @@ FIELDS = [
     "convective_transport",
     "surface_cooling",
     "convective_max_diffusivity",
+    "opacity_temperature_power",
+    "opacity_density_power",
     "radiative_density_power",
     "converged",
     "converged_step",

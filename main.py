@@ -63,10 +63,22 @@ def parse_args():
         help="Override the maximum convective diffusivity.",
     )
     parser.add_argument(
+        "--opacity-temperature-power",
+        type=float,
+        default=None,
+        help="Override temperature dependence in kappa = rho_contrast^q * T^-p.",
+    )
+    parser.add_argument(
+        "--opacity-density-power",
+        type=float,
+        default=None,
+        help="Override density dependence in kappa = rho_contrast^q * T^-p.",
+    )
+    parser.add_argument(
         "--radiative-density-power",
         type=float,
         default=None,
-        help="Override density dependence in D_rad = D0 * T^p / (rho/rho_surface)^q.",
+        help=argparse.SUPPRESS,
     )
     return parser.parse_args()
 
@@ -145,7 +157,12 @@ def main():
         "convective_transport": args.convective_transport,
         "surface_cooling": args.surface_cooling,
         "convective_max_diffusivity": args.convective_max_diffusivity,
-        "radiative_density_power": args.radiative_density_power,
+        "opacity_temperature_power": args.opacity_temperature_power,
+        "opacity_density_power": (
+            args.opacity_density_power
+            if args.opacity_density_power is not None
+            else args.radiative_density_power
+        ),
     }
     run_case(
         case_name=args.case,

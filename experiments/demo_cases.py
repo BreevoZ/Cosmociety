@@ -2,7 +2,7 @@ DEMO_CASES = {
     "baseline_envelope": {
         "description": "Radiative interior with a convective outer envelope.",
         "params": {
-            "opacity_power": 10.0,
+            "opacity_temperature_power": 10.0,
             "convective_nabla_ad": 0.4,
             "convective_max_diffusivity": 1e-3,
         },
@@ -10,7 +10,7 @@ DEMO_CASES = {
     "dual_convection": {
         "description": "Small convective core plus convective outer envelope.",
         "params": {
-            "opacity_power": 8.0,
+            "opacity_temperature_power": 8.0,
             "convective_nabla_ad": 0.35,
             "convective_max_diffusivity": 5e-4,
         },
@@ -18,7 +18,7 @@ DEMO_CASES = {
     "strong_envelope": {
         "description": "Deeper convective envelope with stronger convective mixing.",
         "params": {
-            "opacity_power": 12.0,
+            "opacity_temperature_power": 12.0,
             "convective_nabla_ad": 0.4,
             "convective_max_diffusivity": 1e-3,
         },
