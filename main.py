@@ -10,7 +10,7 @@ from experiments.demo_cases import case_names, get_case
 
 PREVIEW_PARAMS = {
     "n": 100,
-    "max_steps": 77_000,
+    "max_steps": 77_700,
     "save_every": 3_000,
     "tolerance": -1.0,
 }
