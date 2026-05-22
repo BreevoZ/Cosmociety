@@ -1,7 +1,6 @@
 __pycache__/
 *.pyc
-*.gif
-*.png
-outputs/
+outputs/*
+!outputs/.gitkeep
 .vscode/
 .ipynb_checkpoints/
