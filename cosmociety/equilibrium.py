@@ -1,201 +1,105 @@
 import numpy as np
 
+from .convection import (
+    convective_diffusivity_from_gradient,
+    convective_diffusivity_from_radiative_demand,
+    convective_diffusivity_from_schwarzschild,
+    convective_flux_from_adiabatic_excess,
+)
 from .grid import radial_grid
+from .opacity import opacity_from_state, radiative_diffusivity_from_state
 from .profiles import core_source, density_profile, initial_temperature
 from .transport import diffusion_step, interface_flux
 
 
-def convective_diffusivity_from_gradient(
-    temperature: np.ndarray,
-    dr: float,
-    threshold: float,
-    strength: float,
-    max_diffusivity: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Return a toy convective diffusivity triggered by steep temperature gradients.
-
-    Convection appears where the outward temperature drop is steeper than
-    threshold. The returned cell-centered diffusivity can be added to the
-    radiative diffusivity.
-    """
-    outward_drop = -np.diff(temperature) / dr
-    excess = np.maximum(outward_drop - threshold, 0.0)
-    threshold_scale = max(threshold, 1e-30)
-    interface_diffusivity = np.minimum(
-        strength * excess / threshold_scale,
-        max_diffusivity,
+def convective_threshold_for(
+    convective_criterion: str,
+    convective_gradient_threshold: float,
+    convective_radiative_threshold: float,
+    convective_nabla_ad: float,
+) -> float:
+    """Return the active threshold for a named convection criterion."""
+    if convective_criterion == "gradient":
+        return convective_gradient_threshold
+    if convective_criterion == "radiative":
+        return convective_radiative_threshold
+    if convective_criterion == "schwarzschild":
+        return convective_nabla_ad
+    raise ValueError(
+        "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
     )
 
-    cell_diffusivity = np.zeros_like(temperature)
-    cell_diffusivity[0] = interface_diffusivity[0]
-    cell_diffusivity[-1] = interface_diffusivity[-1]
-    cell_diffusivity[1:-1] = 0.5 * (
-        interface_diffusivity[:-1] + interface_diffusivity[1:]
-    )
 
-    return cell_diffusivity, excess
-
-
-def convective_diffusivity_from_radiative_demand(
-    source: np.ndarray,
-    radius: np.ndarray,
-    diffusivity: np.ndarray,
-    dr: float,
-    threshold: float,
-    strength: float,
-    max_diffusivity: float,
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Return convective diffusivity where radiation alone needs a steep gradient.
-
-    This is a toy Schwarzschild-like trigger. It estimates the luminosity that
-    must pass through each interface from the enclosed source, then asks what
-    temperature gradient radiation alone would need to carry that luminosity.
-    """
-    r_interface = 0.5 * (radius[:-1] + radius[1:])
-    source_shells = source * radius**2 * dr
-    enclosed_luminosity = np.cumsum(source_shells)[:-1]
-
-    diffusivity_interface = 0.5 * (diffusivity[:-1] + diffusivity[1:])
-    radiative_gradient = enclosed_luminosity / (
-        np.maximum(r_interface**2 * diffusivity_interface, 1e-30)
-    )
-    excess = np.maximum(radiative_gradient - threshold, 0.0)
-    threshold_scale = max(threshold, 1e-30)
-    interface_diffusivity = np.minimum(
-        strength * excess / threshold_scale,
-        max_diffusivity,
-    )
-
-    cell_diffusivity = np.zeros_like(source)
-    cell_diffusivity[0] = interface_diffusivity[0]
-    cell_diffusivity[-1] = interface_diffusivity[-1]
-    cell_diffusivity[1:-1] = 0.5 * (
-        interface_diffusivity[:-1] + interface_diffusivity[1:]
-    )
-
-    return cell_diffusivity, excess
-
-
-def convective_diffusivity_from_schwarzschild(
-    source: np.ndarray,
-    radius: np.ndarray,
+def evaluate_convection(
+    convective_criterion: str,
     temperature: np.ndarray,
     pressure: np.ndarray,
-    diffusivity: np.ndarray,
+    source: np.ndarray,
+    radius: np.ndarray,
+    radiative_diffusivity: np.ndarray,
     dr: float,
-    nabla_ad: float,
-    strength: float,
-    max_diffusivity: float,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Return convective diffusivity from a toy Schwarzschild criterion.
-
-    It estimates the temperature gradient radiation alone would need to carry
-    the enclosed luminosity, converts that to nabla_rad = d ln T / d ln P, and
-    triggers convection where nabla_rad > nabla_ad.
-    """
-    r_interface = 0.5 * (radius[:-1] + radius[1:])
-    source_shells = source * radius**2 * dr
-    enclosed_luminosity = np.cumsum(source_shells)[:-1]
-
-    diffusivity_interface = 0.5 * (diffusivity[:-1] + diffusivity[1:])
-    required_temperature_drop = enclosed_luminosity / (
-        np.maximum(r_interface**2 * diffusivity_interface, 1e-30)
+    convective_gradient_threshold: float,
+    convective_radiative_threshold: float,
+    convective_nabla_ad: float,
+    convective_strength: float,
+    convective_max_diffusivity: float,
+    enable_convection: bool,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    """Evaluate the current convective state for one temperature profile."""
+    convective_threshold = convective_threshold_for(
+        convective_criterion=convective_criterion,
+        convective_gradient_threshold=convective_gradient_threshold,
+        convective_radiative_threshold=convective_radiative_threshold,
+        convective_nabla_ad=convective_nabla_ad,
     )
+    convective_diffusivity = np.zeros_like(temperature)
+    convective_excess = np.zeros(len(temperature) - 1)
+    nabla_rad = np.zeros(len(temperature) - 1)
 
-    temperature_interface = 0.5 * (temperature[:-1] + temperature[1:])
-    pressure_interface = 0.5 * (pressure[:-1] + pressure[1:])
-    pressure_drop = -np.diff(pressure) / dr
+    if not enable_convection:
+        return (
+            convective_diffusivity,
+            convective_excess,
+            nabla_rad,
+            convective_threshold,
+        )
 
-    nabla_rad = (
-        pressure_interface
-        * required_temperature_drop
-        / np.maximum(temperature_interface * pressure_drop, 1e-30)
-    )
-    excess = np.maximum(nabla_rad - nabla_ad, 0.0)
-    interface_diffusivity = np.minimum(
-        strength * excess / max(nabla_ad, 1e-30),
-        max_diffusivity,
-    )
+    if convective_criterion == "gradient":
+        convective_diffusivity, convective_excess = convective_diffusivity_from_gradient(
+            temperature=temperature,
+            dr=dr,
+            threshold=convective_threshold,
+            strength=convective_strength,
+            max_diffusivity=convective_max_diffusivity,
+        )
+    elif convective_criterion == "radiative":
+        convective_diffusivity, convective_excess = (
+            convective_diffusivity_from_radiative_demand(
+                source=source,
+                radius=radius,
+                diffusivity=radiative_diffusivity,
+                dr=dr,
+                threshold=convective_threshold,
+                strength=convective_strength,
+                max_diffusivity=convective_max_diffusivity,
+            )
+        )
+    elif convective_criterion == "schwarzschild":
+        convective_diffusivity, convective_excess, nabla_rad = (
+            convective_diffusivity_from_schwarzschild(
+                source=source,
+                radius=radius,
+                temperature=temperature,
+                pressure=pressure,
+                diffusivity=radiative_diffusivity,
+                dr=dr,
+                nabla_ad=convective_threshold,
+                strength=convective_strength,
+                max_diffusivity=convective_max_diffusivity,
+            )
+        )
 
-    cell_diffusivity = np.zeros_like(source)
-    cell_diffusivity[0] = interface_diffusivity[0]
-    cell_diffusivity[-1] = interface_diffusivity[-1]
-    cell_diffusivity[1:-1] = 0.5 * (
-        interface_diffusivity[:-1] + interface_diffusivity[1:]
-    )
-
-    return cell_diffusivity, excess, nabla_rad
-
-
-def convective_flux_from_adiabatic_excess(
-    temperature: np.ndarray,
-    pressure: np.ndarray,
-    convective_diffusivity: np.ndarray,
-    dr: float,
-    nabla_ad: float,
-) -> np.ndarray:
-    """
-    Return convective flux that only transports superadiabatic temperature drop.
-
-    The target retained gradient is the toy adiabatic gradient:
-
-        dT/dr_ad = nabla_ad * T/P * dP/dr
-
-    Since outward heat flux is positive, this uses outward temperature drops.
-    """
-    outward_temperature_drop = -np.diff(temperature) / dr
-    outward_pressure_drop = np.maximum(-np.diff(pressure) / dr, 0.0)
-    temperature_interface = 0.5 * (temperature[:-1] + temperature[1:])
-    pressure_interface = 0.5 * (pressure[:-1] + pressure[1:])
-    diffusivity_interface = 0.5 * (
-        convective_diffusivity[:-1] + convective_diffusivity[1:]
-    )
-
-    adiabatic_temperature_drop = (
-        nabla_ad
-        * temperature_interface
-        * outward_pressure_drop
-        / np.maximum(pressure_interface, 1e-30)
-    )
-    superadiabatic_drop = np.maximum(
-        outward_temperature_drop - adiabatic_temperature_drop,
-        0.0,
-    )
-    return diffusivity_interface * superadiabatic_drop
-
-
-def opacity_from_state(
-    temperature: np.ndarray,
-    density: np.ndarray,
-    opacity_temperature_power: float,
-    opacity_density_power: float,
-) -> np.ndarray:
-    """Toy opacity law: kappa = (rho / rho_surface)^q T^-p."""
-    density_contrast = density / max(float(density[-1]), 1e-30)
-    return density_contrast**opacity_density_power * temperature ** (
-        -opacity_temperature_power
-    )
-
-
-def radiative_diffusivity_from_state(
-    temperature: np.ndarray,
-    density: np.ndarray,
-    diffusivity_scale: float,
-    opacity_temperature_power: float,
-    opacity_density_power: float,
-    diffusivity_floor: float,
-) -> np.ndarray:
-    """Toy radiative diffusivity: D_rad = D0 / kappa."""
-    kappa = opacity_from_state(
-        temperature=temperature,
-        density=density,
-        opacity_temperature_power=opacity_temperature_power,
-        opacity_density_power=opacity_density_power,
-    )
-    return np.maximum(diffusivity_scale / kappa, diffusivity_floor)
+    return convective_diffusivity, convective_excess, nabla_rad, convective_threshold
 
 
 def relax_to_equilibrium(
@@ -254,16 +158,12 @@ def relax_to_equilibrium(
 
     converged_step = None
     dr = r[1] - r[0]
-    if convective_criterion == "gradient":
-        convective_threshold = convective_gradient_threshold
-    elif convective_criterion == "radiative":
-        convective_threshold = convective_radiative_threshold
-    elif convective_criterion == "schwarzschild":
-        convective_threshold = convective_nabla_ad
-    else:
-        raise ValueError(
-            "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
-        )
+    convective_threshold = convective_threshold_for(
+        convective_criterion=convective_criterion,
+        convective_gradient_threshold=convective_gradient_threshold,
+        convective_radiative_threshold=convective_radiative_threshold,
+        convective_nabla_ad=convective_nabla_ad,
+    )
     if convective_transport not in {"diffusive", "excess"}:
         raise ValueError("convective_transport must be 'diffusive' or 'excess'")
 
@@ -278,45 +178,21 @@ def relax_to_equilibrium(
             opacity_density_power=opacity_density_power,
             diffusivity_floor=radiative_diffusivity_floor,
         )
-        convective_diffusivity = np.zeros_like(T)
-        if enable_convection:
-            if convective_criterion == "gradient":
-                convective_threshold = convective_gradient_threshold
-                convective_diffusivity, _ = convective_diffusivity_from_gradient(
-                    temperature=T,
-                    dr=dr,
-                    threshold=convective_threshold,
-                    strength=convective_strength,
-                    max_diffusivity=convective_max_diffusivity,
-                )
-            elif convective_criterion == "radiative":
-                convective_threshold = convective_radiative_threshold
-                convective_diffusivity, _ = convective_diffusivity_from_radiative_demand(
-                    source=source,
-                    radius=r,
-                    diffusivity=radiative_diffusivity,
-                    dr=dr,
-                    threshold=convective_threshold,
-                    strength=convective_strength,
-                    max_diffusivity=convective_max_diffusivity,
-                )
-            elif convective_criterion == "schwarzschild":
-                convective_threshold = convective_nabla_ad
-                convective_diffusivity, _, _ = convective_diffusivity_from_schwarzschild(
-                    source=source,
-                    radius=r,
-                    temperature=T,
-                    pressure=pressure,
-                    diffusivity=radiative_diffusivity,
-                    dr=dr,
-                    nabla_ad=convective_threshold,
-                    strength=convective_strength,
-                    max_diffusivity=convective_max_diffusivity,
-                )
-            else:
-                raise ValueError(
-                    "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
-                )
+        convective_diffusivity, _, _, convective_threshold = evaluate_convection(
+            convective_criterion=convective_criterion,
+            temperature=T,
+            pressure=pressure,
+            source=source,
+            radius=r,
+            radiative_diffusivity=radiative_diffusivity,
+            dr=dr,
+            convective_gradient_threshold=convective_gradient_threshold,
+            convective_radiative_threshold=convective_radiative_threshold,
+            convective_nabla_ad=convective_nabla_ad,
+            convective_strength=convective_strength,
+            convective_max_diffusivity=convective_max_diffusivity,
+            enable_convection=enable_convection,
+        )
 
         effective_diffusivity = radiative_diffusivity + convective_diffusivity
         if convective_transport == "diffusive":
@@ -383,51 +259,23 @@ def relax_to_equilibrium(
         opacity_density_power=opacity_density_power,
         diffusivity_floor=radiative_diffusivity_floor,
     )
-    convective_diffusivity = np.zeros_like(T)
-    convective_excess = np.zeros(len(T) - 1)
-    nabla_rad = np.zeros(len(T) - 1)
-    if enable_convection:
-        if convective_criterion == "gradient":
-            convective_threshold = convective_gradient_threshold
-            convective_diffusivity, convective_excess = convective_diffusivity_from_gradient(
-                temperature=T,
-                dr=dr,
-                threshold=convective_threshold,
-                strength=convective_strength,
-                max_diffusivity=convective_max_diffusivity,
-            )
-        elif convective_criterion == "radiative":
-            convective_threshold = convective_radiative_threshold
-            convective_diffusivity, convective_excess = (
-                convective_diffusivity_from_radiative_demand(
-                    source=source,
-                    radius=r,
-                    diffusivity=radiative_diffusivity,
-                    dr=dr,
-                    threshold=convective_threshold,
-                    strength=convective_strength,
-                    max_diffusivity=convective_max_diffusivity,
-                )
-            )
-        elif convective_criterion == "schwarzschild":
-            convective_threshold = convective_nabla_ad
-            convective_diffusivity, convective_excess, nabla_rad = (
-                convective_diffusivity_from_schwarzschild(
-                    source=source,
-                    radius=r,
-                    temperature=T,
-                    pressure=pressure,
-                    diffusivity=radiative_diffusivity,
-                    dr=dr,
-                    nabla_ad=convective_threshold,
-                    strength=convective_strength,
-                    max_diffusivity=convective_max_diffusivity,
-                )
-            )
-        else:
-            raise ValueError(
-                "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
-            )
+    convective_diffusivity, convective_excess, nabla_rad, convective_threshold = (
+        evaluate_convection(
+            convective_criterion=convective_criterion,
+            temperature=T,
+            pressure=pressure,
+            source=source,
+            radius=r,
+            radiative_diffusivity=radiative_diffusivity,
+            dr=dr,
+            convective_gradient_threshold=convective_gradient_threshold,
+            convective_radiative_threshold=convective_radiative_threshold,
+            convective_nabla_ad=convective_nabla_ad,
+            convective_strength=convective_strength,
+            convective_max_diffusivity=convective_max_diffusivity,
+            enable_convection=enable_convection,
+        )
+    )
     total_diffusivity = radiative_diffusivity + convective_diffusivity
     radiative_flux = interface_flux(T, radiative_diffusivity, dr)
     if convective_transport == "diffusive":

@@ -149,9 +149,11 @@ python3 experiments/analyze_scan.py \
 cosmociety/
   grid.py          normalized radial grid
   profiles.py      source, density, and initial temperature profiles
+  opacity.py       toy opacity and radiative diffusivity laws
+  convection.py    convection criteria and convective flux laws
   transport.py     flux-form thermal diffusion step
-  equilibrium.py   relaxation loop and transport physics
-  diagnostics.py   scalar summaries and convective region detection
+  equilibrium.py   relaxation loop that assembles the physics
+  diagnostics.py   scalar summaries, regime labels, and convective regions
   visualize.py     static plots
   animation.py     relaxation animations
 

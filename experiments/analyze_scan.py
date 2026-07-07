@@ -97,6 +97,13 @@ def runs(rows):
     return ", ".join(str(row["run"]) for row in rows) if rows else "none"
 
 
+def count_by(rows, key):
+    counts = defaultdict(int)
+    for row in rows:
+        counts[row.get(key)] += 1
+    return dict(sorted(counts.items(), key=lambda item: str(item[0])))
+
+
 def group_by(rows, key):
     groups = defaultdict(list)
     for row in rows:
@@ -141,14 +148,36 @@ def build_report(rows):
         f"convective envelope runs: {runs(envelope_rows)}",
         f"multi-region runs: {runs(multi_region_rows)}",
         "",
-        "Multi-Region Details",
-        "-" * 20,
+        "Regime Counts",
+        "-" * 13,
     ]
+
+    for regime, count in count_by(rows, "regime").items():
+        lines.append(f"  {regime}: {count}")
+
+    lines.extend(
+        [
+            "",
+            "Structural Regime Counts",
+            "-" * 24,
+        ]
+    )
+    for regime, count in count_by(rows, "structural_regime").items():
+        lines.append(f"  {regime}: {count}")
+
+    lines.extend(
+        [
+            "",
+            "Multi-Region Details",
+            "-" * 20,
+        ]
+    )
 
     if multi_region_rows:
         for row in multi_region_rows:
             lines.append(
-                f"  run {row['run']}: regions={row['convective_regions']} "
+                f"  run {row['run']}: regime={row.get('regime')} "
+                f"regions={row['convective_regions']} "
                 f"p={fmt(row.get('opacity_temperature_power') or row.get('opacity_power'))} "
                 f"Dconv_max={fmt(row['convective_max_diffusivity'])} "
                 f"nabla_ad={fmt(row['convective_nabla_ad'])}"
@@ -166,7 +195,8 @@ def build_report(rows):
     if open_rows:
         for row in open_rows:
             lines.append(
-                f"  run {row['run']}: delta={fmt(row['final_delta'])} "
+                f"  run {row['run']}: regime={row.get('regime')} "
+                f"delta={fmt(row['final_delta'])} "
                 f"p={fmt(row.get('opacity_temperature_power') or row.get('opacity_power'))} "
                 f"Dconv_max={fmt(row['convective_max_diffusivity'])} "
                 f"nabla_ad={fmt(row['convective_nabla_ad'])}"
@@ -196,6 +226,7 @@ def build_report(rows):
     for row in top_rows(rows, "convective_fraction"):
         lines.append(
             f"  run {row['run']}: conv={fmt(row['convective_fraction'])} "
+            f"regime={row.get('regime')} "
             f"regions={row['convective_regions']} "
             f"Tc/Ts={fmt(row['temperature_contrast'])}"
         )
@@ -211,6 +242,7 @@ def build_report(rows):
         lines.append(
             f"  run {row['run']}: Tc/Ts={fmt(row['temperature_contrast'])} "
             f"conv={fmt(row['convective_fraction'])} "
+            f"regime={row.get('regime')} "
             f"regions={row['convective_regions']}"
         )
 
@@ -220,6 +252,7 @@ def build_report(rows):
             "Interpretation Hints",
             "-" * 20,
             "- multi-region runs indicate separated convective zones, usually core + envelope.",
+            "- regime prefixes with open_ indicate runs that did not reach the requested tolerance.",
             "- open runs are useful for trends, but should not be treated as strict equilibrium.",
             "- increasing opacity_temperature_power usually moves the convective envelope inward.",
             "- increasing Dconv_max tends to lower Tc/Ts by strengthening heat transport.",

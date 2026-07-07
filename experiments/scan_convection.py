@@ -55,6 +55,8 @@ FIELDS = [
     "radiative_density_power",
     "converged",
     "converged_step",
+    "regime",
+    "structural_regime",
     "final_delta",
     "temperature_contrast",
     "temperature_center",
@@ -90,6 +92,7 @@ def print_row(row):
         f"p={row['opacity_temperature_power']:<4.1f} "
         f"Dcmax={row['convective_max_diffusivity']:<7.1e} "
         f"nad={row['convective_nabla_ad']:<4.2f} "
+        f"regime={row['regime']:<24s} "
         f"conv={row['convective_fraction']:<5.2f} "
         f"regions={row['convective_region_count']}:{region:<18s} "
         f"Tc/Ts={row['temperature_contrast']:.2f} "

@@ -44,6 +44,8 @@ FIELDS = [
     "radiative_density_power",
     "converged",
     "converged_step",
+    "regime",
+    "structural_regime",
     "final_delta",
     "temperature_contrast",
     "outer_temperature_ratio",
@@ -87,6 +89,7 @@ def print_row(row):
         f"{row['convective_transport']:<9s} "
         f"cool={row['surface_cooling']:<4.0f} "
         f"Dcmax={row['convective_max_diffusivity']:<7.1e} "
+        f"regime={row['regime']:<24s} "
         f"Tc/Ts={row['temperature_contrast']:<6.2f} "
         f"T90/Ts={row['outer_temperature_ratio']:<5.2f} "
         f"conv={row['convective_fraction']:<5.2f} "

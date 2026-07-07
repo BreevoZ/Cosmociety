@@ -18,6 +18,39 @@ def format_regions(regions: list[tuple[float, float]]) -> str:
     return ";".join(f"{inner:.3f}-{outer:.3f}" for inner, outer in regions)
 
 
+def classify_structural_regime(
+    regions: list[tuple[float, float]],
+    has_convective_core: bool,
+    has_convective_envelope: bool,
+) -> str:
+    """Classify the emergent transport structure from convective regions."""
+    if not regions:
+        return "radiative_only"
+
+    if has_convective_core and has_convective_envelope:
+        if len(regions) == 1:
+            return "global_convection"
+        return "dual_convection"
+
+    if has_convective_core:
+        return "convective_core"
+
+    if has_convective_envelope:
+        return "convective_envelope"
+
+    if len(regions) == 1:
+        return "internal_convection"
+
+    return "multiple_internal_convection"
+
+
+def classify_regime(structural_regime: str, converged: bool) -> str:
+    """Return an equilibrium-aware regime label."""
+    if converged:
+        return structural_regime
+    return f"open_{structural_regime}"
+
+
 def summarize_result(result: dict) -> dict:
     """Return scalar diagnostics for comparing toy stellar model runs."""
     r = result["r"]
@@ -28,10 +61,20 @@ def summarize_result(result: dict) -> dict:
     regions = convective_regions(r, active)
     deltas = result.get("deltas", np.array([]))
     timesteps = result.get("timesteps", np.array([]))
+    converged = result.get("converged_step") is not None
+    has_convective_core = bool(regions and regions[0][0] <= r[1])
+    has_convective_envelope = bool(regions and regions[-1][1] >= r[-2])
+    structural_regime = classify_structural_regime(
+        regions=regions,
+        has_convective_core=has_convective_core,
+        has_convective_envelope=has_convective_envelope,
+    )
 
     summary = {
-        "converged": result.get("converged_step") is not None,
+        "converged": converged,
         "converged_step": result.get("converged_step"),
+        "regime": classify_regime(structural_regime, converged),
+        "structural_regime": structural_regime,
         "final_delta": float(deltas[-1]) if len(deltas) else np.nan,
         "min_timestep": float(np.min(timesteps)) if len(timesteps) else np.nan,
         "max_timestep": float(np.max(timesteps)) if len(timesteps) else np.nan,
@@ -46,8 +89,8 @@ def summarize_result(result: dict) -> dict:
         "num_regions": len(regions),
         "convective_region_count": len(regions),
         "convective_regions": format_regions(regions),
-        "has_convective_core": bool(regions and regions[0][0] <= r[1]),
-        "has_convective_envelope": bool(regions and regions[-1][1] >= r[-2]),
+        "has_convective_core": has_convective_core,
+        "has_convective_envelope": has_convective_envelope,
         "max_radiative_diffusivity": float(np.max(result["radiative_diffusivity"])),
         "max_convective_diffusivity": float(np.max(convective_diffusivity)),
         "max_total_diffusivity": float(np.max(result["diffusivity"])),
@@ -72,7 +115,6 @@ def summarize_result(result: dict) -> dict:
 
 def format_summary(summary: dict) -> str:
     """Format the most important diagnostics as a compact human-readable block."""
-    convective_inner = summary["convective_inner_radius"]
     convective_region = summary.get("convective_regions", "none")
 
     converged_step = summary["converged_step"]
@@ -84,6 +126,7 @@ def format_summary(summary: dict) -> str:
     return "\n".join(
         [
             f"converged: {converged}",
+            f"regime: {summary['regime']}",
             f"final_delta: {summary['final_delta']:.3e}",
             f"T_center/T_surface: {summary['temperature_contrast']:.3f}",
             f"T_center: {summary['temperature_center']:.3f}",
