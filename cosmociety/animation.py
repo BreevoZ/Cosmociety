@@ -3,6 +3,15 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation, PillowWriter
 from matplotlib.patches import Patch
 
+from .convection import (
+    convective_diffusivity_from_gradient,
+    convective_diffusivity_from_radiative_demand,
+    convective_diffusivity_from_schwarzschild,
+    convective_flux_from_adiabatic_excess,
+)
+from .opacity import radiative_diffusivity_from_state
+from .transport import interface_flux
+
 
 def animate_relaxation(
     result: dict,
@@ -37,8 +46,6 @@ def animate_relaxation(
     convective_nabla_ad = result.get("convective_nabla_ad", threshold)
     dr = r[1] - r[0]
     r_interface = 0.5 * (r[:-1] + r[1:])
-    source_shells = source * r**2 * dr
-    enclosed_luminosity = np.cumsum(source_shells)[:-1]
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 7.8), constrained_layout=True)
     ax_temp, ax_profile, ax_transport, ax_flux = axes.flat
@@ -128,117 +135,81 @@ def animate_relaxation(
         ends = np.flatnonzero(active & ~np.r_[active[1:], False])
         return zip(starts, ends)
 
-    def convective_interfaces(T):
-        D_rad = radiative_diffusivity(T)
-        if criterion == "gradient":
-            active = (-np.diff(T) / dr) > threshold
-            excess = np.maximum((-np.diff(T) / dr) - threshold, 0.0)
-            return active, excess
-
-        if criterion == "radiative":
-            if opacity_temperature_power is None or diffusivity_scale is None:
-                raise ValueError(
-                    "Radiative convection animation requires opacity_power and "
-                    "radiative_diffusivity_scale in result."
-                )
-
-            diffusivity_interface = 0.5 * (
-                D_rad[:-1] + D_rad[1:]
-            )
-            radiative_gradient = enclosed_luminosity / (
-                np.maximum(r_interface**2 * diffusivity_interface, 1e-30)
-            )
-            active = radiative_gradient > threshold
-            excess = np.maximum(radiative_gradient - threshold, 0.0)
-            return active, excess
-
-        if criterion == "schwarzschild":
-            if opacity_temperature_power is None or diffusivity_scale is None:
-                raise ValueError(
-                    "Schwarzschild convection animation requires opacity_power "
-                    "and radiative_diffusivity_scale in result."
-                )
-
-            diffusivity_interface = 0.5 * (D_rad[:-1] + D_rad[1:])
-            required_temperature_drop = enclosed_luminosity / (
-                np.maximum(r_interface**2 * diffusivity_interface, 1e-30)
-            )
-            pressure = density**pressure_density_power * T
-            pressure_interface = 0.5 * (pressure[:-1] + pressure[1:])
-            temperature_interface = 0.5 * (T[:-1] + T[1:])
-            pressure_drop = -np.diff(pressure) / dr
-            nabla_rad = (
-                pressure_interface
-                * required_temperature_drop
-                / np.maximum(temperature_interface * pressure_drop, 1e-30)
-            )
-            active = nabla_rad > threshold
-            excess = np.maximum(nabla_rad - threshold, 0.0)
-            return active, excess
-
-        raise ValueError(
-            "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
-        )
-
     def radiative_diffusivity(T):
-        if opacity_temperature_power is None or diffusivity_scale is None:
-            return np.full_like(T, diffusivity_floor)
-        density_contrast = density / max(float(density[-1]), 1e-30)
-        density_factor = np.maximum(density_contrast**opacity_density_power, 1e-30)
-        return np.maximum(
-            diffusivity_scale * T**opacity_temperature_power / density_factor,
-            diffusivity_floor,
+        return radiative_diffusivity_from_state(
+            temperature=T,
+            density=density,
+            diffusivity_scale=diffusivity_scale,
+            opacity_temperature_power=opacity_temperature_power,
+            opacity_density_power=opacity_density_power,
+            diffusivity_floor=diffusivity_floor,
         )
 
-    def cell_centered_from_interface(interface_values):
-        cell_values = np.zeros(len(interface_values) + 1)
-        cell_values[0] = interface_values[0]
-        cell_values[-1] = interface_values[-1]
-        cell_values[1:-1] = 0.5 * (interface_values[:-1] + interface_values[1:])
-        return cell_values
+    def convective_state(T, D_rad):
+        """Return (cell-centered D_conv, interface active mask) for one frame.
 
-    def convective_diffusivity_from_excess(excess):
-        threshold_scale = max(threshold, 1e-30)
-        interface_diffusivity = np.minimum(
-            convective_strength * excess / threshold_scale,
-            convective_max_diffusivity,
-        )
-        return cell_centered_from_interface(interface_diffusivity)
+        Dispatches into the same cosmociety.convection criterion functions
+        used by equilibrium.relax_to_equilibrium, so this animation cannot
+        drift from the physics used to produce the static diagnostics/plots.
+        """
+        if not show_convection:
+            return np.zeros_like(T), np.zeros(len(r) - 1, dtype=bool)
 
-    def convective_flux_from_adiabatic_excess(T, D_conv):
-        pressure = density**pressure_density_power * T
-        outward_temperature_drop = -np.diff(T) / dr
-        outward_pressure_drop = np.maximum(-np.diff(pressure) / dr, 0.0)
-        temperature_interface = 0.5 * (T[:-1] + T[1:])
-        pressure_interface = 0.5 * (pressure[:-1] + pressure[1:])
-        diffusivity_interface = 0.5 * (D_conv[:-1] + D_conv[1:])
-        adiabatic_temperature_drop = (
-            convective_nabla_ad
-            * temperature_interface
-            * outward_pressure_drop
-            / np.maximum(pressure_interface, 1e-30)
-        )
-        superadiabatic_drop = np.maximum(
-            outward_temperature_drop - adiabatic_temperature_drop,
-            0.0,
-        )
-        return diffusivity_interface * superadiabatic_drop
+        if criterion == "gradient":
+            D_conv, excess = convective_diffusivity_from_gradient(
+                temperature=T,
+                dr=dr,
+                threshold=threshold,
+                strength=convective_strength,
+                max_diffusivity=convective_max_diffusivity,
+            )
+        elif criterion == "radiative":
+            D_conv, excess = convective_diffusivity_from_radiative_demand(
+                source=source,
+                radius=r,
+                diffusivity=D_rad,
+                dr=dr,
+                threshold=threshold,
+                strength=convective_strength,
+                max_diffusivity=convective_max_diffusivity,
+            )
+        elif criterion == "schwarzschild":
+            pressure = density**pressure_density_power * T
+            D_conv, excess, _ = convective_diffusivity_from_schwarzschild(
+                source=source,
+                radius=r,
+                temperature=T,
+                pressure=pressure,
+                diffusivity=D_rad,
+                dr=dr,
+                nabla_ad=threshold,
+                strength=convective_strength,
+                max_diffusivity=convective_max_diffusivity,
+            )
+        else:
+            raise ValueError(
+                "convective_criterion must be 'gradient', 'radiative', or 'schwarzschild'"
+            )
+
+        return D_conv, excess > 0
 
     def flux_from_components(T, D_rad, D_conv):
-        radiative_flux = interface_flux_from_diffusivity(T, D_rad)
+        radiative_flux = interface_flux(T, D_rad, dr)
         if convective_transport == "diffusive":
-            convective_flux = interface_flux_from_diffusivity(T, D_conv)
+            convective_flux = interface_flux(T, D_conv, dr)
         elif convective_transport == "excess":
-            convective_flux = convective_flux_from_adiabatic_excess(T, D_conv)
+            pressure = density**pressure_density_power * T
+            convective_flux = convective_flux_from_adiabatic_excess(
+                temperature=T,
+                pressure=pressure,
+                convective_diffusivity=D_conv,
+                dr=dr,
+                nabla_ad=convective_nabla_ad,
+            )
         else:
             raise ValueError("convective_transport must be 'diffusive' or 'excess'")
         flux = radiative_flux + convective_flux
         return flux, r_interface**2 * flux
-
-    def interface_flux_from_diffusivity(T, diffusivity):
-        diffusivity_interface = 0.5 * (diffusivity[:-1] + diffusivity[1:])
-        flux = -diffusivity_interface * np.diff(T) / dr
-        return flux
 
     flux_min = 0.0
     flux_max = 1.0
@@ -247,10 +218,7 @@ def animate_relaxation(
         luminosity_values = []
         for T_frame in history:
             D_rad_frame = radiative_diffusivity(T_frame)
-            excess_frame = np.zeros(len(r) - 1)
-            if show_convection:
-                _, excess_frame = convective_interfaces(T_frame)
-            D_conv_frame = convective_diffusivity_from_excess(excess_frame)
+            D_conv_frame, _ = convective_state(T_frame, D_rad_frame)
             flux_frame, luminosity_frame = flux_from_components(
                 T_frame,
                 D_rad_frame,
@@ -298,10 +266,8 @@ def animate_relaxation(
         convective_spans = []
 
         D_rad = radiative_diffusivity(T)
-        active = np.zeros(len(r) - 1, dtype=bool)
-        excess = np.zeros(len(r) - 1)
+        D_conv, active = convective_state(T, D_rad)
         if show_convection:
-            active, excess = convective_interfaces(T)
             for start, end in active_regions(active):
                 convective_spans.append(
                     ax_temp.axvspan(
@@ -314,7 +280,6 @@ def animate_relaxation(
                     )
                 )
 
-        D_conv = convective_diffusivity_from_excess(excess)
         D_total = D_rad + D_conv
         flux, luminosity = flux_from_components(T, D_rad, D_conv)
 

@@ -208,6 +208,15 @@ def relax_to_equilibrium(
                 nabla_ad=convective_nabla_ad,
             )
 
+        # This bound always uses radiative + convective diffusivity, even in
+        # "excess" mode where the step below only diffuses with
+        # radiative_diffusivity and adds extra_interface_flux separately.
+        # That remains a valid, conservative bound: extra_interface_flux is
+        # convective_diffusivity * superadiabatic_drop, and
+        # superadiabatic_drop <= outward_temperature_drop always (the
+        # adiabatic term subtracted from it is never negative), so the excess
+        # flux can never exceed what convective_diffusivity would carry as an
+        # ordinary diffusive term on the same gradient.
         max_effective_diffusivity = float(np.max(effective_diffusivity / heat_capacity))
         stable_dt = stability_safety * dr**2 / max_effective_diffusivity
         step_dt = min(dt, stable_dt)

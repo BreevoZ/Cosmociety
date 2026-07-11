@@ -99,21 +99,22 @@ grid.py, profiles.py  -->  equilibrium.relax_to_equilibrium()  -->  result dict
   superadiabatic temperature drop (added as an extra interface *flux*, not a
   diffusivity, on top of radiative diffusion); `"diffusive"` instead adds the
   convective diffusivity directly to the radiative one and diffuses normally.
-  The CFL `dt` bound is computed from `radiative + convective` diffusivity in
-  both modes even though `"excess"` mode doesn't actually use that combined
-  diffusivity in the step — keep this in mind if tightening stability margins.
+  The CFL `dt` bound always uses `radiative + convective` diffusivity even
+  though `"excess"` mode applies the convective term as a flux rather than a
+  diffusivity — this is intentional and still conservative, since the
+  superadiabatic drop that flux transports can never exceed the raw
+  temperature drop the same diffusivity would carry (see the comment above
+  `stable_dt` in `relax_to_equilibrium`).
 - **`diagnostics.py`** — turns a result dict into scalar summaries: contiguous
   convective region detection, `structural_regime` classification (e.g.
   `convective_core`, `convective_envelope`, `dual_convection`,
   `radiative_only`), and `regime` (structural regime prefixed with `open_` if
   the run didn't converge). This is what scan scripts group/report by.
 - **`visualize.py` / `animation.py`** — static plots and relaxation GIFs.
-  **Note:** `animation.py` re-derives radiative diffusivity and all three
-  convective criteria locally instead of importing `opacity.py`/`convection.py`
-  (it only has access to the saved `history` of temperature snapshots, not a
-  re-run of the physics). If you change a physics law in `opacity.py` or
-  `convection.py`, mirror the change in `animation.py` or the animation will
-  silently drift from the static diagnostics/plots.
+  `animation.py` recomputes per-frame diffusivities and fluxes for each saved
+  `history` snapshot by calling straight into `opacity.py`/`convection.py`/
+  `transport.py` (rather than re-deriving the formulas locally), so it cannot
+  silently drift from the static diagnostics/plots when a physics law changes.
 - **`experiments/demo_cases.py`** — named parameter presets
   (`baseline_envelope`, `dual_convection`, `strong_envelope`, `no_convection`)
   consumed by `main.py` and `run_demo_cases.py`.
