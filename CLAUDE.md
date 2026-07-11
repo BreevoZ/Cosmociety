@@ -22,11 +22,17 @@ resolve.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install numpy matplotlib pillow
+python3 -m pip install numpy matplotlib pillow pytest
 ```
 
-No other runtime dependencies. There is currently no test suite, linter, or
-CI config in this repo.
+No other runtime dependencies. There is currently no linter or CI config in
+this repo. Tests live under `tests/` (pytest); `pytest.ini` sets
+`pythonpath = .` so `cosmociety`/`experiments` resolve without a packaged
+project. Run with:
+
+```bash
+python3 -m pytest
+```
 
 ## Common commands
 
@@ -122,6 +128,17 @@ grid.py, profiles.py  -->  equilibrium.relax_to_equilibrium()  -->  result dict
   parameters, writing one CSV row per run via `summarize_result`.
   `analyze_scan.py` reads that CSV back (independently, via `csv.DictReader`,
   not by importing the scan script) and builds a text report.
+- **`tests/`** — pytest unit tests per module (grid/profiles/opacity/
+  transport/convection/diagnostics), plus `test_equilibrium.py`, which is the
+  main regression guard: it pins a small, fast (n=25) `relax_to_equilibrium`
+  run's exact converged temperature profile as a golden baseline, so an
+  unintentional change to any physics law shows up as a failing assertion
+  instead of a silently different plot. It also asserts the result dict's
+  diffusivities match direct recomputation via `opacity.py`/`convection.py`,
+  and runs `animate_relaxation` on a short history as a wiring smoke test —
+  the same invariant that `animation.py` reusing `opacity.py`/`convection.py`/
+  `transport.py` (see above) rather than re-deriving formulas locally is
+  meant to protect.
 
 ### Backward-compat parameter aliases
 

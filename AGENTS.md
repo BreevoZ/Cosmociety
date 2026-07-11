@@ -8,7 +8,7 @@ Cosmociety is a small Python codebase for toy 1D stellar transport experiments.
 - `cosmociety/` contains the core model: grids, profiles, opacity, convection, transport, equilibrium, diagnostics, plots, and animation.
 - `experiments/` contains batch runners, parameter scans, and scan analysis scripts.
 - `outputs/` is for generated figures, GIFs, summaries, and CSV files. Keep generated run products out of commits.
-- There is currently no dedicated `tests/` directory.
+- `tests/` contains the pytest suite (one file per `cosmociety/` module, plus `test_equilibrium.py` for cross-module/regression checks).
 
 Run scripts from the repository root so local imports resolve correctly.
 
@@ -19,7 +19,7 @@ Create a local environment and install runtime dependencies:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install numpy matplotlib pillow
+python3 -m pip install numpy matplotlib pillow pytest
 ```
 
 Run a short preview:
@@ -60,14 +60,20 @@ This repository does not currently configure a formatter or linter. If adding on
 
 ## Testing Guidelines
 
-No formal test framework is configured yet. For changes to model behavior, run at least:
+Run the pytest suite (deterministic, ~5s):
+
+```bash
+python3 -m pytest
+```
+
+`test_equilibrium.py::test_relax_to_equilibrium_matches_golden_baseline` pins the exact converged temperature profile of a small, fast case; if you intentionally change a physics law, opacity/convection formula, or the timestepping loop, regenerate `GOLDEN_TEMPERATURE`/`GOLDEN_CONVERGED_STEP` there from the new output rather than loosening the tolerance. For changes to model behavior, also run:
 
 ```bash
 python3 main.py --preview
 python3 experiments/scan_convection.py --quick
 ```
 
-When adding tests, prefer `pytest`, place tests under `tests/`, and name files `test_*.py`. Focus on deterministic checks for grid construction, opacity laws, transport steps, diagnostics, and convergence edge cases.
+New tests go under `tests/`, named `test_*.py`. Favor deterministic checks: analytic values for grid/profiles/opacity, conservation and boundary-condition invariants for `transport.diffusion_step`, threshold behavior and the "excess flux never exceeds ordinary diffusive flux" invariant for `convection.py`, and region/regime classification for `diagnostics.py`.
 
 ## Commit & Pull Request Guidelines
 
