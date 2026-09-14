@@ -24,6 +24,9 @@ def animate_relaxation(
 
     r = result["r"]
     history = result["history"]
+    # A finite preview can end between saved snapshots. Show its actual final state.
+    if not np.array_equal(history[-1], result["temperature"]):
+        history = np.concatenate([history, result["temperature"][None, :]])
     source = result["source"]
     density = result.get("density", np.ones_like(r))
     pressure_density_power = result.get("pressure_density_power", 1.0)
@@ -48,6 +51,9 @@ def animate_relaxation(
     r_interface = 0.5 * (r[:-1] + r[1:])
 
     fig, axes = plt.subplots(2, 2, figsize=(12, 7.8), constrained_layout=True)
+    fig.get_layout_engine().set(rect=(0, 0.045, 1, 0.955))
+    status = "Converged" if result.get("converged_step") is not None else "Not converged"
+    fig.suptitle(f"Cosmociety relaxation | {status}")
     ax_temp, ax_profile, ax_transport, ax_flux = axes.flat
 
     ymax = max(history.max(), source.max()) * 1.1
@@ -61,6 +67,7 @@ def animate_relaxation(
     ax_temp.set_title("Temperature")
 
     for ax in axes.flat:
+        ax.set_xlim(0, 1)
         ax.grid(True, alpha=0.3)
         ax.tick_params(labelsize=8)
 

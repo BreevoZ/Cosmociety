@@ -1,191 +1,99 @@
 # Cosmociety
 
-Cosmociety is a toy computational physics framework for studying how simple
-local transport rules produce emergent large-scale structure.
+A small Python project for experimenting with radiative diffusion and convection
+in a one-dimensional, stellar-inspired thermal model. Convective regions follow
+local transport rules rather than being assigned in advance.
 
-The first playground is stellar structure, not because the goal is only to
-model stars, but because stars are clean self-organizing transport systems:
-localized heating, outward energy flow, opacity, cooling boundaries, and
-instabilities can generate distinct transport regimes without hard-coding
-where those regimes should be.
+## Getting started
 
-This project intentionally favors interpretable toy physics over premature
-realism. The code is meant to grow like a small research codebase: add one
-physical effect at a time, isolate it, scan it, diagnose it, and only then make
-the next rule more sophisticated.
-
-## Current Model
-
-The current model evolves a one-dimensional radial temperature profile on a
-normalized grid from the center to the surface:
-
-```text
-r = 0                              r = 1
-center                             surface
-hot core source  ->  transport  -> radiative cooling boundary
-```
-
-At each timestep, the model combines:
-
-- a core-localized heating source,
-- a density-dependent heat capacity,
-- radiative diffusion from a toy opacity law,
-- optional convection triggered by local instability criteria,
-- a surface cooling flux proportional to `T_surface^4 - T_space^4`.
-
-The important design choice is that convective regions are not prescribed.
-They emerge from transport rules and diagnostics.
-
-## Quick Start
-
-Create an environment and install the runtime dependencies.
-
-On macOS/Linux, including Linux inside Windows through WSL:
+Requires Python 3.10 or later. From the repository root:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install numpy matplotlib pillow
-```
-
-If you are using native Windows PowerShell instead of WSL:
-
-```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install numpy matplotlib pillow
-```
-
-Run a short preview case:
-
-```bash
-python3 main.py --preview
-```
-
-In native Windows PowerShell, use `python` or `py -3` in place of `python3`:
-
-```powershell
+python -m pip install -e ".[dev]"
 python main.py --preview
 ```
 
-Run the default case to equilibrium:
+On Windows PowerShell, activate with `.venv\Scripts\Activate.ps1`.
+The runtime dependencies are NumPy, Matplotlib, and Pillow; the `dev` extra adds
+pytest and the package build tool.
+
+Runs write figures, a GIF, a text summary, and JSON/NPZ data under
+`outputs/cases/<case>/`. Use `--no-animation` to skip GIF rendering.
+The installed `cosmociety` command and `python -m cosmociety` also work outside
+the repository.
+
+## Model
+
+The solver evolves a radial temperature profile with a core-localized heat
+source, prescribed density, radiative diffusion, optional convection, and a
+radiative cooling boundary. The toy opacity law is
+`kappa = (rho/rho_surface)^q * T^(-p)`. Convection can transport either the full
+temperature gradient (`diffusive`) or only its superadiabatic excess (`excess`).
+
+All quantities are normalized. Density is fixed and pressure is an algebraic
+proxy; the model does not solve hydrostatic structure or calibrated stellar
+physics. See [the model notes](docs/MODEL.md) for equations, numerical methods,
+and diagnostic definitions.
+
+## Experiments
+
+| Case | Purpose |
+| --- | --- |
+| `baseline_envelope` | Outer convective envelope |
+| `dual_convection` | Separated inner and outer active regions |
+| `strong_envelope` | Stronger temperature dependence of opacity |
+| `no_convection` | Radiative-only reference |
+
+Case names describe parameter presets. Check the measured `regime` in the
+output: `open_` means the stopping tolerance was not reached. Preview mode
+intentionally disables early stopping. The stopping test measures the change
+per timestep; independent energy-balance and resolution studies remain needed.
 
 ```bash
-python3 main.py
+# Request convergence for a case
+python main.py --case baseline_envelope
+
+# Compare with ordinary diffusive convection
+python main.py --preview --convective-transport diffusive \
+  --output-dir outputs/diffusive_preview
+
+# Run all presets in preview mode
+python experiments/run_demo_cases.py
+
+# Run a small parameter scan and analyze its output
+python experiments/scan_convection.py --quick
+python experiments/analyze_scan.py --input outputs/convection_scan_quick.csv \
+  --output outputs/convection_scan_quick_report.txt
 ```
 
-Generated figures, animations, summaries, and CSV scans are written under
-`outputs/`. The repository keeps only `outputs/.gitkeep`; run products are not
-tracked.
+`python main.py --help` lists parameter overrides, including `--n` and
+`--max-steps`. A run that exhausts its budget before convergence still saves its
+final state and exits with status 2. Previews exit with status 0.
 
-## Command Line
+The JSON records all solver arguments, scalar diagnostics, and package versions.
+The NPZ contains numerical arrays and can be opened with
+`numpy.load(path, allow_pickle=False)`. Use the matching source version to
+reproduce a run from its saved parameters.
 
-Run one named demo case:
+## Development
 
 ```bash
-python3 main.py --case baseline_envelope
+python -m pytest
+python -m build
 ```
 
-Available demo cases:
-
-- `baseline_envelope`: radiative interior with a convective outer envelope.
-- `dual_convection`: small convective core plus convective outer envelope.
-- `strong_envelope`: deeper convective envelope with stronger mixing.
-- `no_convection`: radiative-only reference run.
-
-Useful overrides:
-
-```bash
-python3 main.py \
-  --case baseline_envelope \
-  --convective-transport excess \
-  --surface-cooling 10 \
-  --convective-max-diffusivity 1e-3 \
-  --opacity-temperature-power 10 \
-  --opacity-density-power 0.1
-```
-
-The convective transport law can be:
-
-- `excess`: transport only the superadiabatic temperature drop.
-- `diffusive`: treat convection as an additional diffusive channel.
-
-Run all demo cases in preview mode:
-
-```bash
-python3 experiments/run_demo_cases.py
-```
-
-Run all demo cases to equilibrium:
-
-```bash
-python3 experiments/run_demo_cases.py --equilibrium
-```
-
-Scan convection parameters:
-
-```bash
-python3 experiments/scan_convection.py --quick
-python3 experiments/scan_convection.py
-```
-
-Compare transport laws:
-
-```bash
-python3 experiments/scan_transport_law.py
-```
-
-Analyze a convection scan:
-
-```bash
-python3 experiments/analyze_scan.py \
-  --input outputs/convection_scan.csv \
-  --output outputs/convection_scan_report.txt
-```
-
-## Project Layout
+Tests cover analytic rules, transport and boundary invariants, convection
+thresholds, regime classification, a fixed temperature-profile regression,
+and saved-result replay. CI checks tests and package installation.
 
 ```text
-cosmociety/
-  grid.py          normalized radial grid
-  profiles.py      source, density, and initial temperature profiles
-  opacity.py       toy opacity and radiative diffusivity laws
-  convection.py    convection criteria and convective flux laws
-  transport.py     flux-form thermal diffusion step
-  equilibrium.py   relaxation loop that assembles the physics
-  diagnostics.py   scalar summaries, regime labels, and convective regions
-  visualize.py     static plots
-  animation.py     relaxation animations
-
-experiments/
-  demo_cases.py          named parameter sets
-  run_demo_cases.py      batch runner for demo cases
-  scan_convection.py     opacity/convection parameter scan
-  scan_transport_law.py  comparison of convective transport laws
-  analyze_scan.py        text report from scan CSV output
-
-main.py           command-line entry point for one case
-outputs/          local generated results, ignored by git
+cosmociety/    model, solver, diagnostics, plotting, and CLI
+experiments/  demo runners and parameter scans
+tests/        deterministic tests
+docs/         model and numerical-method notes
+outputs/      generated results, ignored by Git
 ```
 
-## Development Philosophy
-
-- Build incrementally, like a real research codebase.
-- Avoid hard-coded stellar zones.
-- Let structure emerge from local transport physics.
-- Prefer interpretable toy rules over hidden realism.
-- Keep every new physical effect isolated enough to scan and diagnose.
-- Treat plots, summaries, and regime classification as part of the model.
-
-The guiding question is not "Can this reproduce a real star yet?" but:
-
-> What kinds of large-scale transport regimes emerge from simple local rules?
-
-## Notes
-
-This is not currently a packaged Python project. Run scripts from the repository
-root so local imports resolve correctly.
-
-The numerical scheme is explicit and intentionally simple. Parameter choices
-can affect stability and convergence, so scans should track both converged and
-open runs.
+Generated results stay under `outputs/` and out of version control.

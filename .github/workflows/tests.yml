@@ -1,0 +1,38 @@
+name: Tests and distribution
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12", "3.14"]
+    env:
+      MPLBACKEND: Agg
+      MPLCONFIGDIR: /tmp/cosmociety-mpl
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install development dependencies
+        run: python -m pip install ".[dev]"
+      - name: Run tests
+        run: python -m pytest
+      - name: Build source and wheel distributions
+        run: python -m build
+      - name: Verify installed wheel outside checkout
+        shell: bash
+        run: |
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          cd "$RUNNER_TEMP"
+          cosmociety --help
+          python -m cosmociety --preview --n 12 --max-steps 4 --no-animation

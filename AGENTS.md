@@ -7,10 +7,15 @@ Cosmociety is a small Python codebase for toy 1D stellar transport experiments.
 - `main.py` is the command-line entry point for running one demo case.
 - `cosmociety/` contains the core model: grids, profiles, opacity, convection, transport, equilibrium, diagnostics, plots, and animation.
 - `experiments/` contains batch runners, parameter scans, and scan analysis scripts.
+- `cosmociety/cli.py` and `artifacts.py` provide the installed command and JSON/NPZ result exports.
+- `docs/` contains model and numerical-method notes.
 - `outputs/` is for generated figures, GIFs, summaries, and CSV files. Keep generated run products out of commits.
 - `tests/` contains the pytest suite (one file per `cosmociety/` module, plus `test_equilibrium.py` for cross-module/regression checks).
 
 Run scripts from the repository root so local imports resolve correctly.
+
+Keep the README text-only. Do not add presentation documents or curated images
+to the repository; generated assets belong under the ignored `outputs/` directory.
 
 ## Build, Test, and Development Commands
 
@@ -19,13 +24,19 @@ Create a local environment and install runtime dependencies:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install numpy matplotlib pillow pytest
+python3 -m pip install -e ".[dev]"
 ```
 
 Run a short preview:
 
 ```bash
 python3 main.py --preview
+```
+
+Build the Python source and wheel distributions:
+
+```bash
+python3 -m build
 ```
 
 Run one named case to equilibrium:
@@ -60,7 +71,7 @@ This repository does not currently configure a formatter or linter. If adding on
 
 ## Testing Guidelines
 
-Run the pytest suite (deterministic, ~5s):
+Run the deterministic pytest suite (runtime depends on the environment):
 
 ```bash
 python3 -m pytest

@@ -8,12 +8,13 @@ def plot_equilibrium(result: dict, save_path: str = "outputs/radiative_equilibri
 
     fig, ax = plt.subplots(figsize=(8, 5))
 
-    ax.plot(r, T, label="Equilibrium temperature T(r)")
+    status = "Converged" if result.get("converged_step") is not None else "Not converged"
+    ax.plot(r, T, label="Final temperature T(r)")
     ax.plot(r, source / source.max() * T.max() * 0.3, "--", label="Core source, scaled")
 
     ax.set_xlabel("Normalized radius r/R")
     ax.set_ylabel("Magnitude")
-    ax.set_title("Minimal 1D Radiative Equilibrium Model")
+    ax.set_title(f"1D Stellar Transport | {status}")
     ax.grid(True, alpha=0.3)
     ax.legend()
 
@@ -74,7 +75,8 @@ def plot_transport_diagnostics(
     for ax in axes.flat:
         ax.grid(True, alpha=0.3)
 
-    fig.suptitle("Transport diagnostics")
+    status = "Converged" if result.get("converged_step") is not None else "Not converged"
+    fig.suptitle(f"Transport diagnostics | {status}")
     plt.tight_layout()
     plt.savefig(save_path, dpi=180)
     plt.close(fig)

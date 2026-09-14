@@ -7,7 +7,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments.demo_cases import case_names
-from main import run_case
+from cosmociety.cli import run_case
 
 
 def parse_args():
@@ -91,18 +91,21 @@ def main():
     }
 
     print(f"Running {len(selected_cases)} case(s) in {'preview' if preview else 'equilibrium'} mode.")
+    all_converged = True
     for index, case_name in enumerate(selected_cases, start=1):
         print(f"\n[{index}/{len(selected_cases)}] {case_name}")
-        run_case(
+        run = run_case(
             case_name=case_name,
             output_dir=args.output_root / case_name,
             preview=preview,
             fps=args.fps,
             overrides=overrides,
         )
+        all_converged = all_converged and run["diagnostics"]["converged"]
 
     print(f"\nFinished. Outputs are under: {args.output_root}")
+    return 0 if preview or all_converged else 2
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
